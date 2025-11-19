@@ -167,6 +167,17 @@ export default function LoginPage() {
               >
                 {isLoading ? 'Entrando...' : 'Login'}
               </Button>
+
+              {/* Link para Cadastro */}
+              <div className="text-center text-sm text-gray-600 mt-4">
+                Não tem uma conta?{' '}
+                <Link
+                  href="/register"
+                  className="text-emerald-600 hover:text-emerald-700 font-medium"
+                >
+                  Criar conta
+                </Link>
+              </div>
             </form>
           </CardContent>
         </Card>
