@@ -20,9 +20,13 @@ const registerSchema = z.object({
   cpf: z.string().regex(/^\d{11}$/, 'CPF deve ter 11 dígitos').optional().or(z.literal('')),
   cnpj: z.string().regex(/^\d{14}$/, 'CNPJ deve ter 14 dígitos').optional().or(z.literal('')),
   senha: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
-  termos: z.boolean().refine((val) => val === true, {
-    message: 'Você deve concordar com os termos e condições',
+  confirmarSenha: z.string().min(6, 'Confirmação de senha é obrigatória'),
+  termos: z.literal(true, {
+    message: 'Você deve concordar com os termos de uso',
   }),
+}).refine((data) => data.senha === data.confirmarSenha, {
+  message: 'As senhas não correspondem',
+  path: ['confirmarSenha'],
 });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
@@ -50,20 +54,59 @@ export default function RegisterPage() {
       // Combinar nome e sobrenome
       const nomeCompleto = `${data.nome} ${data.sobrenome}`;
       
-      await authService.register({
+      // Preparar dados para envio
+      const registerData: any = {
         nome: nomeCompleto,
         email: data.email,
         senha: data.senha,
-      });
+      };
+
+      // Adicionar CPF se foi preenchido
+      if (data.cpf && data.cpf.trim() !== '') {
+        registerData.cpf = data.cpf;
+      }
+
+      // Adicionar CNPJ se foi preenchido
+      if (data.cnpj && data.cnpj.trim() !== '') {
+        registerData.cnpj = data.cnpj;
+      }
+      
+      await authService.register(registerData);
 
       // Redirecionar para login após cadastro bem-sucedido
       router.push('/login?registered=true');
     } catch (err: any) {
-      const errorMessage =
-        err?.response?.data?.message ||
-        err?.response?.data?.errors?.[0]?.message ||
-        'Erro ao criar conta. Tente novamente.';
-      setError(errorMessage);
+      // Tratamento de erros específicos
+      if (err?.response?.data?.errors) {
+        const errors = err.response.data.errors;
+        
+        // Verificar se é um array de erros
+        if (Array.isArray(errors)) {
+          const errorMessages = errors.map((e: any) => e.message || e).join(', ');
+          setError(errorMessages);
+        } else if (typeof errors === 'object') {
+          // Se for um objeto de erros
+          const errorMessages = Object.values(errors).join(', ');
+          setError(errorMessages);
+        } else {
+          setError(errors);
+        }
+      } else if (err?.response?.data?.message) {
+        const message = err.response.data.message;
+        
+        // Traduzir mensagens comuns de erro
+        if (message.includes('email') && message.includes('already')) {
+          setError('Este email já está cadastrado. Tente fazer login ou use outro email.');
+        } else if (message.includes('CPF') && message.includes('already')) {
+          setError('Este CPF já está cadastrado no sistema.');
+        } else if (message.includes('CNPJ') && message.includes('already')) {
+          setError('Este CNPJ já está cadastrado no sistema.');
+        } else {
+          setError(message);
+        }
+      } else {
+        setError('Erro ao criar conta. Verifique os dados e tente novamente.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -213,13 +256,29 @@ export default function RegisterPage() {
                 <Input
                   id="senha"
                   type="password"
-                  placeholder="Senha"
+                  placeholder="Senha (mínimo 6 caracteres)"
                   {...register('senha')}
                   disabled={isLoading}
                   className="h-11"
                 />
                 {errors.senha && (
                   <p className="text-xs text-red-500">{errors.senha.message}</p>
+                )}
+              </div>
+
+              {/* Confirmar Senha */}
+              <div className="space-y-2">
+                <Label htmlFor="confirmarSenha">Confirmar Senha</Label>
+                <Input
+                  id="confirmarSenha"
+                  type="password"
+                  placeholder="Digite a senha novamente"
+                  {...register('confirmarSenha')}
+                  disabled={isLoading}
+                  className="h-11"
+                />
+                {errors.confirmarSenha && (
+                  <p className="text-xs text-red-500">{errors.confirmarSenha.message}</p>
                 )}
               </div>
 
@@ -230,7 +289,9 @@ export default function RegisterPage() {
                   checked={termos}
                   onCheckedChange={(checked) => {
                     setTermos(checked as boolean);
-                    setValue('termos', checked as boolean);
+                    if (checked === true) {
+                      setValue('termos', true, { shouldValidate: true });
+                    }
                   }}
                 />
                 <Label
@@ -250,7 +311,7 @@ export default function RegisterPage() {
                 className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white text-base font-medium"
                 disabled={isLoading}
               >
-                {isLoading ? 'Criando conta...' : 'Login'}
+                {isLoading ? 'Criando conta...' : 'Cadastrar'}
               </Button>
 
               {/* Link para Login */}
