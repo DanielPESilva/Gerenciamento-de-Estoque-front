@@ -17,12 +17,18 @@ const registerSchema = z.object({
   nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   sobrenome: z.string().min(2, 'Sobrenome deve ter pelo menos 2 caracteres'),
   email: z.string().email('Email inválido'),
-  cpf: z.string().regex(/^\d{11}$/, 'CPF deve ter 11 dígitos').optional().or(z.literal('')),
-  cnpj: z.string().regex(/^\d{14}$/, 'CNPJ deve ter 14 dígitos').optional().or(z.literal('')),
+  cpf: z.string().optional().refine(
+    (val) => !val || val === '' || /^\d{11}$/.test(val),
+    { message: 'CPF deve ter 11 dígitos' }
+  ),
+  cnpj: z.string().optional().refine(
+    (val) => !val || val === '' || /^\d{14}$/.test(val),
+    { message: 'CNPJ deve ter 14 dígitos' }
+  ),
   senha: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
-  confirmarSenha: z.string().min(6, 'Confirmação de senha é obrigatória'),
-  termos: z.literal(true, {
-    message: 'Você deve concordar com os termos de uso',
+  confirmarSenha: z.string().min(1, 'Confirme sua senha'),
+  termos: z.boolean().refine((val) => val === true, {
+    message: 'Você deve aceitar os termos de uso',
   }),
 }).refine((data) => data.senha === data.confirmarSenha, {
   message: 'As senhas não correspondem',
@@ -76,26 +82,43 @@ export default function RegisterPage() {
       // Redirecionar para login após cadastro bem-sucedido
       router.push('/login?registered=true');
     } catch (err: any) {
+      console.error('Erro no cadastro:', err);
+      
       // Tratamento de erros específicos
       if (err?.response?.data?.errors) {
         const errors = err.response.data.errors;
         
-        // Verificar se é um array de erros
+        // Verificar se é um array de erros do Zod
         if (Array.isArray(errors)) {
-          const errorMessages = errors.map((e: any) => e.message || e).join(', ');
-          setError(errorMessages);
+          // Verificar se é o formato do backend (array de strings)
+          if (typeof errors[0] === 'string') {
+            const errorMsg = errors[0];
+            
+            if (errorMsg.includes('Email já está em uso') || errorMsg.includes('já está em uso')) {
+              setError('Este email já está cadastrado. Tente fazer login ou use outro email.');
+            } else {
+              setError(errorMsg);
+            }
+          } else {
+            // Formato padrão com objetos {path, message}
+            const errorMessages = errors.map((e: any) => e.message || e).join(', ');
+            setError(errorMessages);
+          }
+        } else if (typeof errors === 'string') {
+          if (errors.includes('Email já está em uso')) {
+            setError('Este email já está cadastrado. Tente fazer login ou use outro email.');
+          } else {
+            setError(errors);
+          }
         } else if (typeof errors === 'object') {
-          // Se for um objeto de erros
           const errorMessages = Object.values(errors).join(', ');
           setError(errorMessages);
-        } else {
-          setError(errors);
         }
       } else if (err?.response?.data?.message) {
         const message = err.response.data.message;
         
-        // Traduzir mensagens comuns de erro
-        if (message.includes('email') && message.includes('already')) {
+        // Mensagens específicas
+        if (message.includes('Email já está em uso') || message.includes('já está em uso')) {
           setError('Este email já está cadastrado. Tente fazer login ou use outro email.');
         } else if (message.includes('CPF') && message.includes('already')) {
           setError('Este CPF já está cadastrado no sistema.');
@@ -104,6 +127,8 @@ export default function RegisterPage() {
         } else {
           setError(message);
         }
+      } else if (err?.code === 'ERR_NETWORK') {
+        setError('Erro de conexão. Verifique se o servidor está rodando.');
       } else {
         setError('Erro ao criar conta. Verifique os dados e tente novamente.');
       }
@@ -205,7 +230,7 @@ export default function RegisterPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="E-mail"
+                  placeholder="seu@email.com"
                   {...register('email')}
                   disabled={isLoading}
                   className="h-11"
@@ -218,15 +243,34 @@ export default function RegisterPage() {
               {/* CPF e CNPJ */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="cpf">CPF</Label>
+                  <Label htmlFor="cpf">CPF (opcional)</Label>
                   <Input
                     id="cpf"
                     type="text"
-                    placeholder="CPF"
-                    maxLength={11}
+                    placeholder="000.000.000-00"
+                    maxLength={14}
                     {...register('cpf')}
                     disabled={isLoading}
                     className="h-11"
+                    onChange={(e) => {
+                      // Remover caracteres não numéricos
+                      let value = e.target.value.replace(/\D/g, '');
+                      
+                      // Limitar a 11 dígitos
+                      value = value.substring(0, 11);
+                      
+                      // Aplicar máscara: 000.000.000-00
+                      if (value.length > 9) {
+                        value = value.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+                      } else if (value.length > 6) {
+                        value = value.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+                      } else if (value.length > 3) {
+                        value = value.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+                      }
+                      
+                      e.target.value = value;
+                      setValue('cpf', value.replace(/\D/g, ''), { shouldValidate: true });
+                    }}
                   />
                   {errors.cpf && (
                     <p className="text-xs text-red-500">{errors.cpf.message}</p>
@@ -234,15 +278,36 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="cnpj">CNPJ</Label>
+                  <Label htmlFor="cnpj">CNPJ (opcional)</Label>
                   <Input
                     id="cnpj"
                     type="text"
-                    placeholder="CNPJ"
-                    maxLength={14}
+                    placeholder="00.000.000/0000-00"
+                    maxLength={18}
                     {...register('cnpj')}
                     disabled={isLoading}
                     className="h-11"
+                    onChange={(e) => {
+                      // Remover caracteres não numéricos
+                      let value = e.target.value.replace(/\D/g, '');
+                      
+                      // Limitar a 14 dígitos
+                      value = value.substring(0, 14);
+                      
+                      // Aplicar máscara: 00.000.000/0000-00
+                      if (value.length > 12) {
+                        value = value.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})/, '$1.$2.$3/$4-$5');
+                      } else if (value.length > 8) {
+                        value = value.replace(/(\d{2})(\d{3})(\d{3})(\d{1,4})/, '$1.$2.$3/$4');
+                      } else if (value.length > 5) {
+                        value = value.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
+                      } else if (value.length > 2) {
+                        value = value.replace(/(\d{2})(\d{1,3})/, '$1.$2');
+                      }
+                      
+                      e.target.value = value;
+                      setValue('cnpj', value.replace(/\D/g, ''), { shouldValidate: true });
+                    }}
                   />
                   {errors.cnpj && (
                     <p className="text-xs text-red-500">{errors.cnpj.message}</p>
@@ -283,27 +348,28 @@ export default function RegisterPage() {
               </div>
 
               {/* Termos */}
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="termos"
-                  checked={termos}
-                  onCheckedChange={(checked) => {
-                    setTermos(checked as boolean);
-                    if (checked === true) {
-                      setValue('termos', true, { shouldValidate: true });
-                    }
-                  }}
-                />
-                <Label
-                  htmlFor="termos"
-                  className="text-sm font-normal cursor-pointer"
-                >
-                  Concordo com os termos e condições
-                </Label>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="termos"
+                    checked={termos}
+                    onCheckedChange={(checked) => {
+                      const isChecked = checked === true;
+                      setTermos(isChecked);
+                      setValue('termos', isChecked, { shouldValidate: true });
+                    }}
+                  />
+                  <Label
+                    htmlFor="termos"
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    Concordo com os termos e condições
+                  </Label>
+                </div>
+                {errors.termos && (
+                  <p className="text-xs text-red-500">{errors.termos.message}</p>
+                )}
               </div>
-              {errors.termos && (
-                <p className="text-xs text-red-500">{errors.termos.message}</p>
-              )}
 
               {/* Botão Cadastrar */}
               <Button

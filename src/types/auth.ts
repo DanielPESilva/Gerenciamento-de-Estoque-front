@@ -11,12 +11,15 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  success: boolean;
   data: {
     user: User;
     accessToken: string;
     refreshToken: string;
   };
+  error: boolean;
+  code: number;
+  message: string;
+  errors: any[];
 }
 
 export interface RegisterRequest {
