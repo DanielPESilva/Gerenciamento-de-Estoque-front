@@ -23,7 +23,18 @@ export default function LoginPage() {
   const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [rememberMe, setRememberMe] = useState(false);
+
+  // Verificar se veio da tela de cadastro
+  useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('registered') === 'true') {
+        setSuccess('Conta criada com sucesso! Faça login para continuar.');
+      }
+    }
+  });
 
   const {
     register,
@@ -37,14 +48,48 @@ export default function LoginPage() {
     setIsLoading(true);
     setError(null);
 
+    console.log('🔐 Tentando fazer login com:', { email: data.email });
+
     try {
       await login(data);
+      console.log('✅ Login bem-sucedido!');
     } catch (err: any) {
-      const errorMessage =
-        err?.response?.data?.message ||
-        err?.response?.data?.errors?.[0]?.message ||
-        'Erro ao fazer login. Verifique suas credenciais.';
-      setError(errorMessage);
+      console.error('❌ Erro no login:', err);
+      console.error('Resposta completa:', err?.response);
+      
+      // Tratamento específico de erros
+      if (err?.response?.data?.errors) {
+        const errors = err.response.data.errors;
+        
+        if (Array.isArray(errors)) {
+          // Array de erros do Zod
+          const errorMessages = errors.map((e: any) => e.message).join(', ');
+          setError(errorMessages);
+        } else if (typeof errors === 'string') {
+          setError(errors);
+        } else if (Array.isArray(errors) && errors.length > 0 && errors[0].includes('Credenciais inválidas')) {
+          setError('Email ou senha incorretos. Verifique seus dados e tente novamente.');
+        } else {
+          setError('Email ou senha incorretos. Verifique seus dados e tente novamente.');
+        }
+      } else if (err?.response?.data?.message) {
+        const message = err.response.data.message;
+        
+        // Mensagens específicas
+        if (message.includes('Credenciais inválidas') || message.includes('inválidas')) {
+          setError('Email ou senha incorretos. Verifique seus dados e tente novamente.');
+        } else {
+          setError(message);
+        }
+      } else if (err?.response?.status === 401) {
+        setError('Email ou senha incorretos. Verifique seus dados e tente novamente.');
+      } else if (err?.response?.status === 404) {
+        setError('Usuário não encontrado. Verifique seu email ou crie uma conta.');
+      } else if (err?.code === 'ERR_NETWORK') {
+        setError('Erro de conexão. Verifique se o servidor está rodando.');
+      } else {
+        setError('Erro ao fazer login. Tente novamente mais tarde.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -96,6 +141,12 @@ export default function LoginPage() {
             </div>
 
             <h2 className="text-3xl font-bold text-center mb-8">Login</h2>
+
+            {success && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-600 rounded-md text-sm">
+                {success}
+              </div>
+            )}
 
             {error && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-md text-sm">
