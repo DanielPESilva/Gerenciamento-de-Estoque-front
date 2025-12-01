@@ -1,0 +1,7 @@
+{
+  "/dashboard/page": "app/dashboard/page.js",
+  "/preparar-venda/page": "app/preparar-venda/page.js",
+  "/login/page": "app/login/page.js",
+  "/meu-perfil/page": "app/meu-perfil/page.js",
+  "/cadastrar-condicional/page": "app/cadastrar-condicional/page.js"
+}
