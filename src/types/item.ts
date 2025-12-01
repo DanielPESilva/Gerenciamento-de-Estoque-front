@@ -15,6 +15,14 @@ export interface Item {
     nome: string;
     email: string;
   };
+  Imagens?: {
+    id: number;
+    url: string;
+    criado_em: string;
+  }[];
+  // Campos derivados calculados na API para vendas/condicionais (quando disponíveis)
+  valor?: number;
+  unidades?: number;
 }
 
 export interface ItemsResponse {
@@ -48,7 +56,6 @@ export interface CreateItemData {
   cor: string;
   preco: number;
   quantidade: number;
-  usuarios_id: number;
 }
 
 export interface UpdateItemData {

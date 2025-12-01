@@ -1,15 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Header } from '@/components/Header';
+import { SuccessModal } from '@/components/SuccessModal';
 import { itemsService } from '@/services/items.service';
 import { Item } from '@/types/item';
 import { Pencil, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth();
+  const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -22,6 +24,8 @@ export default function DashboardPage() {
     valor: '',
     cor: ''
   });
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const loadItems = async () => {
     try {
@@ -67,6 +71,12 @@ export default function DashboardPage() {
           });
         }
 
+        if (valorNum && !isNaN(valorNum)) {
+          itemsWithoutHash = itemsWithoutHash.filter(item => {
+            return Math.abs(item.preco - valorNum) < 0.01;
+          });
+        }
+
         console.log(`📊 Items encontrados: ${itemsWithoutHash.length}`);
         
         setItems(itemsWithoutHash);
@@ -104,6 +114,8 @@ export default function DashboardPage() {
       try {
         await itemsService.delete(id);
         loadItems();
+        setSuccessMessage('Item excluído com sucesso!');
+        setSuccessModalOpen(true);
       } catch (error) {
         console.error('Erro ao deletar item:', error);
         alert('Erro ao deletar item');
@@ -120,51 +132,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-gray-800 text-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            {/* Logo */}
-            <div className="flex items-center gap-3">
-              <div className="flex gap-0.5">
-                {[...Array(5)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-1 bg-white rounded-full"
-                    style={{ height: `${12 + i * 3}px` }}
-                  />
-                ))}
-              </div>
-              <h1 className="text-xl font-serif">Dressify</h1>
-            </div>
-
-            {/* Navigation */}
-            <nav className="flex gap-6">
-              <button className="text-white hover:text-emerald-400 transition">
-                Meu Estoque
-              </button>
-              <button className="text-gray-400 hover:text-white transition">
-                Cadastrar Condicional
-              </button>
-              <button className="text-gray-400 hover:text-white transition">
-                Preparar Venda
-              </button>
-            </nav>
-
-            {/* User Profile */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
-                <span className="text-sm font-bold">
-                  {user?.nome?.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <button onClick={logout} className="text-sm text-gray-400 hover:text-white">
-                ▼
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header activePage="estoque" />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -291,7 +259,7 @@ export default function DashboardPage() {
 
           <div className="flex justify-end">
             <Button
-              onClick={handleSearch}
+              onClick={() => router.push('/cadastrar-item')}
               className="bg-emerald-500 hover:bg-emerald-600 text-white"
             >
               Cadastrar Item
@@ -339,7 +307,11 @@ export default function DashboardPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {items.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50">
+                    <tr 
+                      key={item.id} 
+                      onClick={() => router.push(`/visualizar-item/${item.id}`)}
+                      className="hover:bg-gray-50 cursor-pointer transition"
+                    >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                         {item.nome}
                       </td>
@@ -359,18 +331,13 @@ export default function DashboardPage() {
                         {item.cor}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => alert('Funcionalidade de edição em desenvolvimento')}
-                            className="text-gray-600 hover:text-gray-900"
-                          >
-                            <Trash2 size={18} />
-                          </button>
+                        <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => handleDelete(item.id)}
-                            className="text-gray-600 hover:text-gray-900"
+                            className="text-red-600 hover:text-red-900 transition"
+                            title="Deletar item"
                           >
-                            <Pencil size={18} />
+                            <Trash2 size={18} />
                           </button>
                         </div>
                       </td>
@@ -419,6 +386,11 @@ export default function DashboardPage() {
           )}
         </div>
       </main>
+      <SuccessModal
+        open={successModalOpen}
+        message={successMessage || 'Operação concluída.'}
+        onClose={() => setSuccessModalOpen(false)}
+      />
     </div>
   );
 }

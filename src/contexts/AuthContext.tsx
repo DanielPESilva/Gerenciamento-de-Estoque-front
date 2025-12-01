@@ -11,6 +11,7 @@ interface AuthContextType {
   login: (data: LoginRequest) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  updateUser: (data: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,6 +31,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, []);
 
+  const syncUser = (nextUser: User | null) => {
+    if (nextUser) {
+      localStorage.setItem('user', JSON.stringify(nextUser));
+    } else {
+      localStorage.removeItem('user');
+    }
+    setUser(nextUser);
+  };
+
   const login = async (data: LoginRequest) => {
     try {
       const response = await authService.login(data);
@@ -42,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', refreshToken);
         
-        setUser(user);
+        syncUser(user);
         router.push('/dashboard');
       }
     } catch (error: any) {
@@ -52,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     authService.logout();
-    setUser(null);
+    syncUser(null);
     router.push('/login');
   };
 
@@ -64,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         isAuthenticated: !!user,
+        updateUser: syncUser,
       }}
     >
       {children}
