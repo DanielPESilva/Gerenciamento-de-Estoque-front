@@ -9,7 +9,8 @@ import { SuccessModal } from '@/components/SuccessModal';
 import { itemsService } from '@/services/items.service';
 import { Item } from '@/types/item';
 import { SaleItem } from '@/types/sale';
-import { CheckCircle2, Loader2, Minus, Plus, Trash2, X } from 'lucide-react';
+import { CheckCircle2, CreditCard, Loader2, Minus, Plus, Trash2, X, ChevronDown, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface FilterState {
   nome: string;
@@ -39,6 +40,21 @@ export default function PrepararVendaPage() {
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [processingSale, setProcessingSale] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('Pix');
+  const [salesHistory, setSalesHistory] = useState<
+    { timestamp: string; items: number; amount: number; method: string }[]
+  >([]);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = localStorage.getItem('dressfy-sales-history');
+    if (!stored) return;
+    try {
+      setSalesHistory(JSON.parse(stored));
+    } catch (err) {
+      console.error('Erro ao carregar histórico de vendas:', err);
+    }
+  }, []);
+  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
 
   const loadItems = async (page = 1) => {
     try {
@@ -208,10 +224,26 @@ export default function PrepararVendaPage() {
       setSelectedItems({});
       await loadItems(currentPage);
 
+      const saleEntry = {
+        timestamp: new Date().toISOString(),
+        items: totalQuantidade,
+        amount: totalValor,
+        method: paymentMethod
+      };
+
+      setSalesHistory((prev) => {
+        const updated = [saleEntry, ...prev].slice(0, 3);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('dressfy-sales-history', JSON.stringify(updated));
+        }
+        return updated;
+      });
+
       setSuccessMessage(`Venda concluída com sucesso!
 
 Itens removidos: ${totalQuantidade}
-Valor total: ${formatCurrency(totalValor)}`);
+Valor total: ${formatCurrency(totalValor)}
+Método de pagamento: ${paymentMethod}`);
       setSuccessModalOpen(true);
     } catch (error) {
       console.error('Erro ao finalizar venda:', error);
@@ -357,7 +389,7 @@ Valor total: ${formatCurrency(totalValor)}`);
             <CheckCircle2 className="h-5 w-5 text-emerald-500" />
             Resumo da Venda
           </h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
             <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4 text-center">
               <div className="text-sm text-emerald-800">Itens selecionados</div>
               <div className="text-2xl font-bold text-emerald-600">{Object.keys(selectedItems).length}</div>
@@ -370,8 +402,79 @@ Valor total: ${formatCurrency(totalValor)}`);
               <div className="text-sm text-purple-800">Valor total</div>
               <div className="text-2xl font-bold text-purple-600">{formatCurrency(totalValor)}</div>
             </div>
+            <div className="rounded-lg border border-amber-100 bg-amber-50 p-4 text-center">
+              <div className="text-sm text-amber-800">Pagamento</div>
+              <button
+                type="button"
+                onClick={() => setShowPaymentOptions((prev) => !prev)}
+                className="group mt-1 flex w-full items-center justify-center gap-2 text-base font-semibold text-amber-700 transition hover:text-amber-800 focus:outline-none"
+              >
+                <CreditCard className="h-4 w-4" />
+                {paymentMethod}
+                <ChevronDown
+                  className={cn(
+                    'h-4 w-4 transition-transform',
+                    showPaymentOptions ? 'rotate-180' : 'rotate-0'
+                  )}
+                />
+              </button>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-col gap-3">
+            {showPaymentOptions && (
+              <div className="flex flex-wrap gap-2 rounded-lg border border-amber-100 bg-amber-50/70 p-3 text-sm text-gray-600 sm:justify-start">
+                {['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Boleto', 'Cheque', 'Permuta'].map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod(option);
+                      setShowPaymentOptions(false);
+                    }}
+                    className={cn(
+                      'flex items-center gap-2 rounded-full border px-3 py-1 transition',
+                      option === paymentMethod
+                        ? 'border-amber-400 bg-amber-100 text-amber-700 font-medium'
+                        : 'border-transparent bg-white text-gray-600 hover:border-amber-200 hover:bg-amber-50'
+                    )}
+                  >
+                    {option === paymentMethod && <Check className="h-4 w-4" />}
+                    {option}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </section>
+
+        {salesHistory.length > 0 && (
+          <section className="mb-8 rounded-lg bg-white p-6 shadow">
+            <h2 className="mb-4 text-lg font-semibold text-gray-700">Últimas vendas</h2>
+            <div className="space-y-3">
+              {salesHistory.map((sale) => (
+                <div
+                  key={sale.timestamp}
+                  className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="font-medium text-gray-800">
+                    {new Date(sale.timestamp).toLocaleString('pt-BR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span>Itens: {sale.items}</span>
+                    <span>Valor: {formatCurrency(sale.amount)}</span>
+                    <span>Método: {sale.method}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]">
           {/* Items list */}
