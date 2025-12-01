@@ -1,7 +1,6 @@
 {
-  "/dashboard/page": "app/dashboard/page.js",
-  "/preparar-venda/page": "app/preparar-venda/page.js",
+  "/page": "app/page.js",
   "/login/page": "app/login/page.js",
-  "/meu-perfil/page": "app/meu-perfil/page.js",
-  "/cadastrar-condicional/page": "app/cadastrar-condicional/page.js"
+  "/dashboard/page": "app/dashboard/page.js",
+  "/preparar-venda/page": "app/preparar-venda/page.js"
 }
