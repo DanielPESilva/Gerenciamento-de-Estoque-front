@@ -39,6 +39,7 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    setError: setFormFieldError,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -57,6 +58,9 @@ export default function LoginPage() {
       console.error('❌ Erro no login:', err);
       console.error('Resposta completa:', err?.response);
       
+      const invalidCredentialsMessage = 'Email ou senha incorretos. Verifique seus dados e tente novamente.';
+      let feedbackMessage = invalidCredentialsMessage;
+
       // Tratamento específico de erros
       if (err?.response?.data?.errors) {
         const errors = err.response.data.errors;
@@ -64,31 +68,40 @@ export default function LoginPage() {
         if (Array.isArray(errors)) {
           // Array de erros do Zod
           const errorMessages = errors.map((e: any) => e.message).join(', ');
-          setError(errorMessages);
+          feedbackMessage = errorMessages;
         } else if (typeof errors === 'string') {
-          setError(errors);
+          feedbackMessage = errors;
         } else if (Array.isArray(errors) && errors.length > 0 && errors[0].includes('Credenciais inválidas')) {
-          setError('Email ou senha incorretos. Verifique seus dados e tente novamente.');
+          feedbackMessage = invalidCredentialsMessage;
         } else {
-          setError('Email ou senha incorretos. Verifique seus dados e tente novamente.');
+          feedbackMessage = invalidCredentialsMessage;
         }
       } else if (err?.response?.data?.message) {
         const message = err.response.data.message;
         
         // Mensagens específicas
         if (message.includes('Credenciais inválidas') || message.includes('inválidas')) {
-          setError('Email ou senha incorretos. Verifique seus dados e tente novamente.');
+          feedbackMessage = invalidCredentialsMessage;
         } else {
-          setError(message);
+          feedbackMessage = message;
         }
       } else if (err?.response?.status === 401) {
-        setError('Email ou senha incorretos. Verifique seus dados e tente novamente.');
+        feedbackMessage = invalidCredentialsMessage;
       } else if (err?.response?.status === 404) {
-        setError('Usuário não encontrado. Verifique seu email ou crie uma conta.');
+        feedbackMessage = 'Usuário não encontrado. Verifique seu email ou crie uma conta.';
       } else if (err?.code === 'ERR_NETWORK') {
-        setError('Erro de conexão. Verifique se o servidor está rodando.');
+        feedbackMessage = 'Erro de conexão. Verifique se o servidor está rodando.';
       } else {
-        setError('Erro ao fazer login. Tente novamente mais tarde.');
+        feedbackMessage = 'Erro ao fazer login. Tente novamente mais tarde.';
+      }
+
+      setError(feedbackMessage);
+
+      if (feedbackMessage === invalidCredentialsMessage) {
+        setFormFieldError('email', { type: 'manual', message: invalidCredentialsMessage });
+        setFormFieldError('senha', { type: 'manual', message: invalidCredentialsMessage });
+      } else if (feedbackMessage.toLowerCase().includes('usuário não encontrado')) {
+        setFormFieldError('email', { type: 'manual', message: feedbackMessage });
       }
     } finally {
       setIsLoading(false);
