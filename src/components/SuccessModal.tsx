@@ -7,6 +7,10 @@ interface SuccessModalProps {
   primaryLabel?: string;
   onPrimaryAction?: () => void;
   onClose: () => void;
+  primaryDisabled?: boolean;
+  secondaryLabel?: string;
+  onSecondaryAction?: () => void;
+  secondaryDisabled?: boolean;
 }
 
 export function SuccessModal({
@@ -15,17 +19,33 @@ export function SuccessModal({
   message,
   primaryLabel = 'Ok',
   onPrimaryAction,
-  onClose
+  onClose,
+  primaryDisabled = false,
+  secondaryLabel,
+  onSecondaryAction,
+  secondaryDisabled = false
 }: SuccessModalProps) {
   if (!open) {
     return null;
   }
 
   const handlePrimaryClick = () => {
+    if (primaryDisabled) {
+      return;
+    }
     if (onPrimaryAction) {
       onPrimaryAction();
     }
     onClose();
+  };
+
+  const handleSecondaryClick = () => {
+    if (secondaryDisabled) {
+      return;
+    }
+    if (onSecondaryAction) {
+      onSecondaryAction();
+    }
   };
 
   return (
@@ -47,12 +67,24 @@ export function SuccessModal({
         </div>
         <h2 className="mb-2 text-2xl font-semibold text-emerald-600">{title}</h2>
         <p className="mb-6 text-base text-gray-600">{message}</p>
-        <button
-          onClick={handlePrimaryClick}
-          className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-500 px-6 py-3 text-base font-medium text-white shadow-sm transition hover:bg-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
-        >
-          {primaryLabel}
-        </button>
+        <div className="flex flex-col gap-3">
+          {secondaryLabel && onSecondaryAction && (
+            <button
+              onClick={handleSecondaryClick}
+              disabled={secondaryDisabled}
+              className="inline-flex w-full items-center justify-center rounded-lg border border-emerald-300 px-6 py-3 text-base font-medium text-emerald-600 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {secondaryLabel}
+            </button>
+          )}
+          <button
+            onClick={handlePrimaryClick}
+            disabled={primaryDisabled}
+            className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-500 px-6 py-3 text-base font-medium text-white shadow-sm transition hover:bg-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {primaryLabel}
+          </button>
+        </div>
       </div>
     </div>
   );

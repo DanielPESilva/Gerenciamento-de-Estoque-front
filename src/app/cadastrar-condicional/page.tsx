@@ -72,6 +72,8 @@ function getDefaultDevolucaoDate() {
   return now.toISOString().slice(0, 16);
 }
 
+type CondicionalStatus = 'vendido' | 'devolvido';
+
 export default function CadastrarCondicionalPage() {
   const [filters, setFilters] = useState<FilterState>(initialFilterState);
   const [items, setItems] = useState<Item[]>([]);
@@ -91,6 +93,10 @@ export default function CadastrarCondicionalPage() {
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [condicionalToSell, setCondicionalToSell] = useState<Condicional | null>(null);
   const [isSelling, setIsSelling] = useState(false);
+  const [pendingReturnCondId, setPendingReturnCondId] = useState<number | null>(null);
+  const [isReturningCond, setIsReturningCond] = useState(false);
+  const [returningCondId, setReturningCondId] = useState<number | null>(null);
+  const [condicionalStatuses, setCondicionalStatuses] = useState<Record<number, CondicionalStatus>>({});
 
   const {
     register: registerQuickClient,
@@ -349,17 +355,24 @@ export default function CadastrarCondicionalPage() {
       | 'Cheque'
       | 'Permuta';
     observacoes?: string;
+    descricao_permuta?: string;
   }) => {
     if (!condicionalToSell) return;
 
     setIsSelling(true);
     try {
-      await condicionaisService.convertToSale(condicionalToSell.id, {
+      const result = await condicionaisService.convertToSale(condicionalToSell.id, {
         itens_vendidos: 'todos',
         ...params
       });
       setSuccessMessage('Venda registrada com sucesso!');
       setSuccessModalOpen(true);
+      const condFinalizado = result?.data?.resumo?.condicional_finalizado ?? false;
+      setPendingReturnCondId(condFinalizado ? null : condicionalToSell.id);
+      setCondicionalStatuses((prev) => ({
+        ...prev,
+        [condicionalToSell.id]: 'vendido'
+      }));
       setSaleModalOpen(false);
       setCondicionalToSell(null);
       await loadCondicionais();
@@ -369,6 +382,49 @@ export default function CadastrarCondicionalPage() {
       setSuccessModalOpen(true);
     } finally {
       setIsSelling(false);
+    }
+  };
+
+  const handleAutoReturnCondicional = async () => {
+    if (!pendingReturnCondId || isReturningCond) {
+      return;
+    }
+    const condId = pendingReturnCondId;
+    try {
+      setIsReturningCond(true);
+      await condicionaisService.finalize(condId);
+      setSuccessMessage('Todos os itens foram devolvidos ao estoque.');
+      setPendingReturnCondId(null);
+      setCondicionalStatuses((prev) => ({
+        ...prev,
+        [condId]: 'devolvido'
+      }));
+      await loadCondicionais();
+    } catch (error) {
+      console.error('Erro ao devolver itens do condicional:', error);
+      setSuccessMessage('Não foi possível devolver os itens automaticamente. Tente novamente.');
+    } finally {
+      setIsReturningCond(false);
+    }
+  };
+
+  const handleReturnAllCondicional = async (condicionalId: number) => {
+    try {
+      setReturningCondId(condicionalId);
+      await condicionaisService.finalize(condicionalId);
+      setSuccessMessage('Itens devolvidos ao estoque com sucesso.');
+      setSuccessModalOpen(true);
+      setCondicionalStatuses((prev) => ({
+        ...prev,
+        [condicionalId]: 'devolvido'
+      }));
+      await loadCondicionais();
+    } catch (error) {
+      console.error('Erro ao devolver itens do condicional:', error);
+      setSuccessMessage('Não foi possível devolver os itens. Tente novamente.');
+      setSuccessModalOpen(true);
+    } finally {
+      setReturningCondId((current) => (current === condicionalId ? null : current));
     }
   };
 
@@ -778,6 +834,19 @@ export default function CadastrarCondicionalPage() {
                       0
                     );
 
+                    const statusOverride = condicionalStatuses[condicional.id];
+                    const isDevolvido = condicional.devolvido;
+                    const statusLabel = !isDevolvido
+                      ? 'Em aberto'
+                      : statusOverride === 'vendido'
+                        ? 'Vendido'
+                        : 'Devolvido';
+                    const badgeClass = !isDevolvido
+                      ? 'bg-amber-100 text-amber-600'
+                      : statusOverride === 'vendido'
+                        ? 'bg-blue-100 text-blue-600'
+                        : 'bg-green-100 text-green-600';
+
                     return (
                       <article
                         key={condicional.id}
@@ -810,13 +879,9 @@ export default function CadastrarCondicionalPage() {
                             </p>
                           </div>
                           <span
-                            className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${
-                              condicional.devolvido
-                                ? 'bg-green-100 text-green-600'
-                                : 'bg-amber-100 text-amber-600'
-                            }`}
+                          className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${badgeClass}`}
                           >
-                            {condicional.devolvido ? 'Finalizado' : 'Em aberto'}
+                          {statusLabel}
                           </span>
                         </div>
 
@@ -841,6 +906,14 @@ export default function CadastrarCondicionalPage() {
                               disabled={condicional.devolvido || isSelling}
                             >
                               {condicional.devolvido ? 'Venda registrada' : 'Registrar venda'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleReturnAllCondicional(condicional.id)}
+                              disabled={condicional.devolvido || returningCondId === condicional.id}
+                            >
+                              {returningCondId === condicional.id ? 'Devolvendo...' : 'Devolver tudo'}
                             </Button>
                             <Button
                               size="sm"
@@ -897,8 +970,19 @@ export default function CadastrarCondicionalPage() {
       <SuccessModal
         open={successModalOpen}
         message={successMessage || 'Operação concluída.'}
-        onClose={() => setSuccessModalOpen(false)}
-        onPrimaryAction={() => setSuccessModalOpen(false)}
+        onClose={() => {
+          setSuccessModalOpen(false);
+          setPendingReturnCondId(null);
+        }}
+        onPrimaryAction={() => {
+          setSuccessModalOpen(false);
+          setPendingReturnCondId(null);
+        }}
+        secondaryLabel={
+          pendingReturnCondId ? (isReturningCond ? 'Devolvendo...' : 'Devolver itens restantes') : undefined
+        }
+        onSecondaryAction={pendingReturnCondId ? handleAutoReturnCondicional : undefined}
+        secondaryDisabled={isReturningCond}
       />
     </div>
   );

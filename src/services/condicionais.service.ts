@@ -18,6 +18,16 @@ export interface CreateCondicionalResponse {
   };
 }
 
+export interface ConvertToSaleResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    resumo?: {
+      condicional_finalizado?: boolean;
+    };
+  };
+}
+
 export const condicionaisService = {
   async create(payload: CreateCondicionalPayload): Promise<CreateCondicionalResponse> {
     const response = await api.post<CreateCondicionalResponse>('/condicionais', payload);
@@ -38,14 +48,22 @@ export const condicionaisService = {
         | 'Permuta';
       desconto?: number;
       observacoes?: string;
+      descricao_permuta?: string;
     }
-  ): Promise<{ success: boolean; message?: string }> {
-    const response = await api.post<{ success: boolean; message?: string }>(
+  ): Promise<ConvertToSaleResponse> {
+    const response = await api.post<ConvertToSaleResponse>(
       `/condicionais/${condicionalId}/converter-venda`,
       {
         desconto: 0,
         ...payload
       }
+    );
+    return response.data;
+  },
+
+  async finalize(condicionalId: number): Promise<{ success: boolean; message?: string }> {
+    const response = await api.post<{ success: boolean; message?: string }>(
+      `/condicionais/${condicionalId}/finalizar`
     );
     return response.data;
   }

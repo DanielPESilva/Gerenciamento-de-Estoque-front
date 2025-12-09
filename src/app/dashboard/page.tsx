@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Header } from '@/components/Header';
 import { SuccessModal } from '@/components/SuccessModal';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { itemsService } from '@/services/items.service';
 import { Item } from '@/types/item';
 import { Pencil, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -26,6 +27,9 @@ export default function DashboardPage() {
   });
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<Item | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadItems = async () => {
     try {
@@ -109,18 +113,34 @@ export default function DashboardPage() {
     setFilters(prev => ({ ...prev, [filterName]: '' }));
   };
 
-  const handleDelete = async (id: number) => {
-    if (confirm('Tem certeza que deseja deletar este item?')) {
-      try {
-        await itemsService.delete(id);
-        loadItems();
-        setSuccessMessage('Item excluído com sucesso!');
-        setSuccessModalOpen(true);
-      } catch (error) {
-        console.error('Erro ao deletar item:', error);
-        alert('Erro ao deletar item');
-      }
+  const handleDeleteRequest = (item: Item) => {
+    setItemToDelete(item);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      await itemsService.delete(itemToDelete.id);
+      await loadItems();
+      setSuccessMessage('Item excluído com sucesso!');
+      setSuccessModalOpen(true);
+    } catch (error) {
+      console.error('Erro ao deletar item:', error);
+      setSuccessMessage('Erro ao deletar item.');
+      setSuccessModalOpen(true);
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
     }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteDialogOpen(false);
+    setItemToDelete(null);
   };
 
   const formatCurrency = (value: number) => {
@@ -333,7 +353,7 @@ export default function DashboardPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                           <button
-                            onClick={() => handleDelete(item.id)}
+                            onClick={() => handleDeleteRequest(item)}
                             className="text-red-600 hover:text-red-900 transition"
                             title="Deletar item"
                           >
@@ -390,6 +410,16 @@ export default function DashboardPage() {
         open={successModalOpen}
         message={successMessage || 'Operação concluída.'}
         onClose={() => setSuccessModalOpen(false)}
+      />
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="Excluir item"
+        description="Tem certeza que deseja deletar este item? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        cancelLabel="Cancelar"
+        isLoading={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
       />
     </div>
   );

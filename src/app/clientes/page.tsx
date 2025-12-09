@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { clientesService } from '@/services/clientes.service';
 import { Client } from '@/types/client';
-import { Loader2, UserPlus2 } from 'lucide-react';
+import { Loader2, Trash2, UserPlus2 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 const clientSchema = z.object({
   nome: z.string().min(3, 'Informe o nome completo'),
@@ -49,6 +50,9 @@ export default function ClientesPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [filterTerm, setFilterTerm] = useState('');
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const {
     register,
@@ -135,6 +139,36 @@ export default function ClientesPage() {
       );
     });
   }, [clients, filterTerm]);
+
+  const handleDeleteRequest = (client: Client) => {
+    setClientToDelete(client);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!clientToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      await clientesService.delete(clientToDelete.id);
+      setClients((prev) => prev.filter((c) => c.id !== clientToDelete.id));
+      setSuccessMessage('Cliente removido com sucesso.');
+      setSuccessModalOpen(true);
+    } catch (err) {
+      console.error('Erro ao remover cliente:', err);
+      setSuccessMessage('Não foi possível remover o cliente. Tente novamente.');
+      setSuccessModalOpen(true);
+    } finally {
+      setIsDeleting(false);
+      setDeleteModalOpen(false);
+      setClientToDelete(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteModalOpen(false);
+    setClientToDelete(null);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -290,6 +324,9 @@ export default function ClientesPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                         Criado em
                       </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                        Ações
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white text-sm text-gray-600">
@@ -299,25 +336,34 @@ export default function ClientesPage() {
                         `${client.nome}-${client.email ?? client.telefone ?? 'sem-identificador'}-${index}`;
                       return (
                         <tr key={rowKey} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 font-medium text-gray-800">{client.nome}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col gap-1">
-                            {client.email && <span>{client.email}</span>}
-                            {client.telefone && (
-                              <span className="text-xs text-gray-500">{client.telefone}</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          {client.criado_em
-                            ? new Date(client.criado_em).toLocaleDateString('pt-BR', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric'
-                              })
-                            : '—'}
-                        </td>
-                      </tr>
+                          <td className="px-6 py-4 font-medium text-gray-800">{client.nome}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col gap-1">
+                              {client.email && <span>{client.email}</span>}
+                              {client.telefone && (
+                                <span className="text-xs text-gray-500">{client.telefone}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            {client.criado_em
+                              ? new Date(client.criado_em).toLocaleDateString('pt-BR', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric'
+                                })
+                              : '—'}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button
+                              onClick={() => handleDeleteRequest(client)}
+                              className="inline-flex items-center rounded-md border border-transparent bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-100 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+                            >
+                              <Trash2 size={14} className="mr-1" />
+                              Remover
+                            </button>
+                          </td>
+                        </tr>
                       );
                     })}
                   </tbody>
@@ -333,6 +379,16 @@ export default function ClientesPage() {
         message={successMessage ?? 'Operação concluída.'}
         onClose={() => setSuccessModalOpen(false)}
         onPrimaryAction={() => setSuccessModalOpen(false)}
+      />
+      <ConfirmDialog
+        open={deleteModalOpen}
+        title="Remover cliente"
+        description="Tem certeza que deseja remover este cliente? Isso pode afetar os condicionais associados."
+        confirmLabel="Remover"
+        cancelLabel="Cancelar"
+        isLoading={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
       />
     </div>
   );

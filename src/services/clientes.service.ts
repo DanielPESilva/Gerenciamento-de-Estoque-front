@@ -44,6 +44,10 @@ export const clientesService = {
   }): Promise<Client> {
     const { data } = await api.post<Client>('/clientes', payload);
     return data;
+  },
+
+  async delete(id: number): Promise<void> {
+    await api.delete(`/clientes/${id}`);
   }
 };
 

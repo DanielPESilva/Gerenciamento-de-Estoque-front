@@ -20,7 +20,11 @@ interface FinalizeCondicionalModalProps {
   condicional: Condicional | null;
   isSubmitting: boolean;
   onClose: () => void;
-  onConfirm: (params: { forma_pagamento: typeof PAYMENT_METHODS[number]; observacoes?: string }) => void;
+  onConfirm: (params: {
+    forma_pagamento: typeof PAYMENT_METHODS[number];
+    observacoes?: string;
+    descricao_permuta?: string;
+  }) => void;
 }
 
 export function FinalizeCondicionalModal({
@@ -33,6 +37,7 @@ export function FinalizeCondicionalModal({
   const [selectedMethod, setSelectedMethod] = useState<typeof PAYMENT_METHODS[number]>('Pix');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [barterDescription, setBarterDescription] = useState('');
 
   const resumo = useMemo(() => {
     if (!condicional) return { totalItens: 0, valorTotal: 0 };
@@ -54,15 +59,23 @@ export function FinalizeCondicionalModal({
       return;
     }
 
+    if (selectedMethod === 'Permuta' && !barterDescription.trim()) {
+      setError('Descreva a permuta antes de concluir a venda.');
+      return;
+    }
+
     setError(null);
     onConfirm({
       forma_pagamento: selectedMethod,
-      observacoes: notes.trim() ? notes.trim() : undefined
+      observacoes: notes.trim() ? notes.trim() : undefined,
+      descricao_permuta:
+        selectedMethod === 'Permuta' ? barterDescription.trim() : undefined
     });
   };
 
   const handleClose = () => {
     setNotes('');
+    setBarterDescription('');
     setError(null);
     onClose();
   };
@@ -165,7 +178,13 @@ export function FinalizeCondicionalModal({
                   <button
                     key={method}
                     type="button"
-                    onClick={() => setSelectedMethod(method)}
+                    onClick={() => {
+                      setSelectedMethod(method);
+                      if (method !== 'Permuta') {
+                        setBarterDescription('');
+                        setError(null);
+                      }
+                    }}
                     className={`rounded-lg border px-3 py-3 text-sm transition ${
                       selectedMethod === method
                         ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
@@ -177,6 +196,23 @@ export function FinalizeCondicionalModal({
                 ))}
               </div>
             </div>
+
+            {selectedMethod === 'Permuta' && (
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700" htmlFor="barter-description">
+                  Descrição da permuta <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  id="barter-description"
+                  value={barterDescription}
+                  onChange={(event) => setBarterDescription(event.target.value)}
+                  placeholder="Ex: Cliente trocou por mercadorias equivalentes."
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  rows={3}
+                  disabled={isSubmitting}
+                />
+              </div>
+            )}
 
             <div>
               <label className="text-sm font-semibold text-gray-700" htmlFor="sale-notes">

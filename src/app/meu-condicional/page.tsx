@@ -5,6 +5,7 @@ import { Header } from '@/components/Header';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { SuccessModal } from '@/components/SuccessModal';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { condicionaisListService } from '@/services/condicionais-list.service';
 import { condicionaisService } from '@/services/condicionais.service';
 import { Condicional } from '@/types/condicional';
@@ -31,6 +32,8 @@ const PAYMENT_METHODS: Array<
   | 'Permuta'
 > = ['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Boleto', 'Cheque', 'Permuta'];
 
+type CondicionalStatus = 'vendido' | 'devolvido';
+
 export default function MeuCondicionalPage() {
   const [filters, setFilters] = useState<FilterState>(initialFilterState);
   const [condicionais, setCondicionais] = useState<Condicional[]>([]);
@@ -49,6 +52,12 @@ export default function MeuCondicionalPage() {
   const [saleDiscount, setSaleDiscount] = useState('');
   const [saleNotes, setSaleNotes] = useState('');
   const [saleProcessing, setSaleProcessing] = useState(false);
+  const [salePermutaDescription, setSalePermutaDescription] = useState('');
+  const [saleError, setSaleError] = useState<string | null>(null);
+  const [returningCondId, setReturningCondId] = useState<number | null>(null);
+  const [condicionalStatuses, setCondicionalStatuses] = useState<Record<number, CondicionalStatus>>({});
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [condicionalToDelete, setCondicionalToDelete] = useState<Condicional | null>(null);
 
   const loadCondicionais = async (page = 1) => {
     try {
@@ -110,10 +119,15 @@ export default function MeuCondicionalPage() {
     loadCondicionais(1);
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Tem certeza que deseja excluir este condicional?')) {
-      return;
-    }
+  const handleDelete = (condicional: Condicional) => {
+    setCondicionalToDelete(condicional);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!condicionalToDelete) return;
+
+    const id = condicionalToDelete.id;
 
     try {
       setDeletingId(id);
@@ -124,6 +138,8 @@ export default function MeuCondicionalPage() {
       if (selectedCondicional?.id === id) {
         setSelectedCondicional(null);
       }
+      setCondicionalToDelete(null);
+      setDeleteModalOpen(false);
     } catch (error) {
       console.error('Erro ao excluir condicional:', error);
       setSuccessMessage('Erro ao excluir condicional.');
@@ -131,6 +147,11 @@ export default function MeuCondicionalPage() {
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteModalOpen(false);
+    setCondicionalToDelete(null);
   };
 
   const toggleSaleItem = (itemId: number, maxQuantity: number) => {
@@ -191,6 +212,8 @@ export default function MeuCondicionalPage() {
     setSalePaymentMethod('Pix');
     setSaleDiscount('');
     setSaleNotes('');
+    setSalePermutaDescription('');
+    setSaleError(null);
   }, [selectedCondicional]);
 
   useEffect(() => {
@@ -224,7 +247,8 @@ export default function MeuCondicionalPage() {
 
     const parsedDiscount = saleDiscount ? Number.parseFloat(saleDiscount) : 0;
     const desconto = Number.isNaN(parsedDiscount) || parsedDiscount < 0 ? 0 : parsedDiscount;
-    const descontoAplicado = Math.min(desconto, bruto);
+    const descontoAplicado =
+      salePaymentMethod === 'Permuta' ? 0 : Math.min(desconto, bruto);
     const total = Math.max(bruto - descontoAplicado, 0);
 
     return {
@@ -233,7 +257,7 @@ export default function MeuCondicionalPage() {
       total,
       itens: itensSelecionados
     };
-  }, [saleItems, saleDiscount, selectedCondicional]);
+  }, [saleItems, saleDiscount, salePaymentMethod, selectedCondicional]);
 
   const handleConfirmSale = async () => {
     if (!selectedCondicional) return;
@@ -250,23 +274,36 @@ export default function MeuCondicionalPage() {
       return;
     }
 
+    if (salePaymentMethod === 'Permuta' && !salePermutaDescription.trim()) {
+      setSaleError('Descreva a permuta para concluir a venda.');
+      return;
+    }
+
+    setSaleError(null);
     setSaleProcessing(true);
     try {
       await condicionaisService.convertToSale(selectedCondicional.id, {
         itens_vendidos: saleTotals.itens,
         forma_pagamento: salePaymentMethod,
-        desconto: saleTotals.desconto,
-        observacoes: saleNotes.trim() ? saleNotes.trim() : undefined
+        desconto: salePaymentMethod === 'Permuta' ? 0 : saleTotals.desconto,
+        observacoes: saleNotes.trim() ? saleNotes.trim() : undefined,
+        descricao_permuta:
+          salePaymentMethod === 'Permuta' ? salePermutaDescription.trim() : undefined
       });
 
       setSuccessMessage('Venda registrada com sucesso!');
       setSuccessModalOpen(true);
+      setCondicionalStatuses((prev) => ({
+        ...prev,
+        [selectedCondicional.id]: 'vendido'
+      }));
 
       const updatedList = await loadCondicionais(currentPage);
       const updatedCondicional = updatedList.find(
         (cond) => cond.id === selectedCondicional.id
       );
       setSelectedCondicional(updatedCondicional ?? null);
+      setSalePermutaDescription('');
     } catch (error) {
       console.error('Erro ao registrar venda:', error);
       setSuccessMessage('Não foi possível registrar a venda. Tente novamente.');
@@ -278,6 +315,28 @@ export default function MeuCondicionalPage() {
 
   const handleCancelSale = () => {
     resetSaleState();
+  };
+
+  const handleReturnAll = async (condicionalId: number) => {
+    try {
+      setReturningCondId(condicionalId);
+      await condicionaisService.finalize(condicionalId);
+      setSuccessMessage('Itens devolvidos ao estoque com sucesso.');
+      setSuccessModalOpen(true);
+      setCondicionalStatuses((prev) => ({
+        ...prev,
+        [condicionalId]: 'devolvido'
+      }));
+      const updatedList = await loadCondicionais(currentPage);
+      const updatedCondicional = updatedList.find((cond) => cond.id === condicionalId);
+      setSelectedCondicional(updatedCondicional ?? null);
+    } catch (error) {
+      console.error('Erro ao devolver itens do condicional:', error);
+      setSuccessMessage('Não foi possível devolver os itens. Tente novamente.');
+      setSuccessModalOpen(true);
+    } finally {
+      setReturningCondId(null);
+    }
   };
 
   const resumo = useMemo(() => {
@@ -294,6 +353,24 @@ export default function MeuCondicionalPage() {
       valorTotal
     };
   }, [selectedCondicional]);
+
+  const selectedStatusOverride = selectedCondicional
+    ? condicionalStatuses[selectedCondicional.id]
+    : undefined;
+  const selectedStatusLabel = selectedCondicional
+    ? selectedCondicional.devolvido
+      ? selectedStatusOverride === 'vendido'
+        ? 'Vendido'
+        : 'Devolvido'
+      : 'Em aberto'
+    : 'Em aberto';
+  const selectedStatusBadgeClass = selectedCondicional
+    ? selectedCondicional.devolvido
+      ? selectedStatusOverride === 'vendido'
+        ? 'bg-blue-100 text-blue-600'
+        : 'bg-green-100 text-green-600'
+      : 'bg-amber-100 text-amber-600'
+    : 'bg-amber-100 text-amber-600';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -353,78 +430,100 @@ export default function MeuCondicionalPage() {
                   Nenhum condicional encontrado.
                 </div>
               ) : (
-                condicionais.map((condicional) => (
-                  <article
-                    key={condicional.id}
-                    onClick={() => setSelectedCondicional(condicional)}
-                    className={`cursor-pointer rounded-lg border p-4 transition hover:border-emerald-400 ${
-                      selectedCondicional?.id === condicional.id
-                        ? 'border-emerald-500 bg-emerald-50'
-                        : 'border-gray-200 bg-white'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-800">{condicional.cliente_nome}</h3>
-                        <p className="text-sm text-gray-500">
-                          Criado em{' '}
-                          {new Date(condicional.data).toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric'
-                          })}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          Devolução:{' '}
-                          {new Date(condicional.data_devolucao).toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric'
-                          })}
-                        </p>
+                condicionais.map((condicional) => {
+                  const statusOverride = condicionalStatuses[condicional.id];
+                  const isDevolvido = condicional.devolvido;
+                  const statusLabel = !isDevolvido
+                    ? 'Em aberto'
+                    : statusOverride === 'vendido'
+                      ? 'Vendido'
+                      : 'Devolvido';
+                  const badgeClass = !isDevolvido
+                    ? 'bg-amber-100 text-amber-600'
+                    : statusOverride === 'vendido'
+                      ? 'bg-blue-100 text-blue-600'
+                      : 'bg-green-100 text-green-600';
+
+                  return (
+                    <article
+                      key={condicional.id}
+                      onClick={() => setSelectedCondicional(condicional)}
+                      className={`cursor-pointer rounded-lg border p-4 transition hover:border-emerald-400 ${
+                        selectedCondicional?.id === condicional.id
+                          ? 'border-emerald-500 bg-emerald-50'
+                          : 'border-gray-200 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-800">{condicional.cliente_nome}</h3>
+                          <p className="text-sm text-gray-500">
+                            Criado em{' '}
+                            {new Date(condicional.data).toLocaleDateString('pt-BR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric'
+                            })}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            Devolução:{' '}
+                            {new Date(condicional.data_devolucao).toLocaleDateString('pt-BR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric'
+                            })}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${badgeClass}`}
+                          >
+                            {statusLabel}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReturnAll(condicional.id);
+                            }}
+                            disabled={condicional.devolvido || returningCondId === condicional.id}
+                          >
+                            {returningCondId === condicional.id ? 'Devolvendo...' : 'Devolver tudo'}
+                          </Button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                            handleDelete(condicional);
+                            }}
+                            className="text-gray-400 transition hover:text-red-500"
+                            disabled={deletingId === condicional.id}
+                          >
+                            {deletingId === condicional.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 size={16} />
+                            )}
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${
-                            condicional.devolvido
-                              ? 'bg-green-100 text-green-600'
-                              : 'bg-amber-100 text-amber-600'
-                          }`}
-                        >
-                          {condicional.devolvido ? 'Devolvido' : 'Ativo'}
+                      <div className="mt-3 flex gap-4 text-sm text-gray-600">
+                        <span>
+                          Itens: {condicional.itens.length}
                         </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(condicional.id);
-                          }}
-                          className="text-gray-400 transition hover:text-red-500"
-                          disabled={deletingId === condicional.id}
-                        >
-                          {deletingId === condicional.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 size={16} />
+                        <span>
+                          Total reservado:{' '}
+                          {formatCurrency(
+                            condicional.itens.reduce(
+                              (acc, item) => acc + (item.valor_estimado ?? 0) * item.quantidade,
+                              0
+                            )
                           )}
-                        </button>
+                        </span>
                       </div>
-                    </div>
-                    <div className="mt-3 flex gap-4 text-sm text-gray-600">
-                      <span>
-                        Itens: {condicional.itens.length}
-                      </span>
-                      <span>
-                        Total reservado:{' '}
-                        {formatCurrency(
-                          condicional.itens.reduce(
-                            (acc, item) => acc + (item.valor_estimado ?? 0) * item.quantidade,
-                            0
-                          )
-                        )}
-                      </span>
-                    </div>
-                  </article>
-                ))
+                    </article>
+                  );
+                })
               )}
             </div>
 
@@ -494,13 +593,9 @@ export default function MeuCondicionalPage() {
                   <p className="mt-2 text-sm font-medium text-gray-600">
                     Status:{' '}
                     <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${
-                        selectedCondicional.devolvido
-                          ? 'bg-green-100 text-green-600'
-                          : 'bg-amber-100 text-amber-600'
-                      }`}
+                      className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${selectedStatusBadgeClass}`}
                     >
-                      {selectedCondicional.devolvido ? 'Devolvido' : 'Ativo'}
+                      {selectedStatusLabel}
                     </span>
                   </p>
                 </div>
@@ -594,8 +689,9 @@ export default function MeuCondicionalPage() {
 
                 {selectedCondicional.devolvido ? (
                   <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                    Este condicional já foi finalizado como venda. Revise o histórico ou selecione outro
-                    registro para novas operações.
+                    {selectedStatusOverride === 'vendido'
+                      ? 'Este condicional foi convertido em venda. Revise o histórico ou selecione outro registro para novas operações.'
+                      : 'Este condicional já foi devolvido ao estoque. Revise o histórico ou selecione outro registro para novas operações.'}
                   </div>
                 ) : (
                   <div className="mt-6 space-y-4 rounded-lg border border-gray-200 p-4">
@@ -606,7 +702,13 @@ export default function MeuCondicionalPage() {
                           <button
                             key={method}
                             type="button"
-                            onClick={() => setSalePaymentMethod(method)}
+                        onClick={() => {
+                          setSalePaymentMethod(method);
+                          if (method !== 'Permuta') {
+                            setSalePermutaDescription('');
+                            setSaleError(null);
+                          }
+                        }}
                             disabled={saleProcessing}
                             className={`rounded-lg border px-3 py-2 text-sm transition ${
                               salePaymentMethod === method
@@ -631,10 +733,15 @@ export default function MeuCondicionalPage() {
                           min="0"
                           step="0.01"
                           value={saleDiscount}
-                          onChange={(event) => setSaleDiscount(event.target.value)}
-                          disabled={saleProcessing}
-                          placeholder="Ex: 50.00"
+                      onChange={(event) => setSaleDiscount(event.target.value)}
+                      disabled={saleProcessing || salePaymentMethod === 'Permuta'}
+                      placeholder={salePaymentMethod === 'Permuta' ? 'Não aplicável para permuta' : 'Ex: 50.00'}
                         />
+                    {salePaymentMethod === 'Permuta' && (
+                      <p className="text-xs text-gray-500">
+                        Em vendas por permuta o valor é ajustado automaticamente para R$ 0,00.
+                      </p>
+                    )}
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-gray-700" htmlFor="sale-notes">
@@ -651,6 +758,23 @@ export default function MeuCondicionalPage() {
                         />
                       </div>
                     </div>
+
+                {salePaymentMethod === 'Permuta' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700" htmlFor="sale-barter-description">
+                      Descrição da permuta <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      id="sale-barter-description"
+                      rows={3}
+                      value={salePermutaDescription}
+                      onChange={(event) => setSalePermutaDescription(event.target.value)}
+                      disabled={saleProcessing}
+                      placeholder="Ex: Cliente trocou por créditos em mercadoria."
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </div>
+                )}
 
                     <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-700">
                       <div className="flex justify-between">
@@ -675,6 +799,17 @@ export default function MeuCondicionalPage() {
 
                     <div className="flex flex-wrap justify-end gap-3">
                       <Button
+                        variant="destructive"
+                        onClick={() => handleReturnAll(selectedCondicional.id)}
+                        disabled={
+                          returningCondId === selectedCondicional.id ||
+                          saleProcessing ||
+                          selectedCondicional.devolvido
+                        }
+                      >
+                        {returningCondId === selectedCondicional.id ? 'Devolvendo...' : 'Devolver tudo'}
+                      </Button>
+                      <Button
                         variant="outline"
                         onClick={handleCancelSale}
                         disabled={saleProcessing}
@@ -690,6 +825,9 @@ export default function MeuCondicionalPage() {
                         {saleProcessing ? 'Registrando...' : 'Registrar venda'}
                       </Button>
                     </div>
+                {saleError && (
+                  <p className="text-sm font-medium text-red-500">{saleError}</p>
+                )}
                   </div>
                 )}
 
@@ -722,6 +860,16 @@ export default function MeuCondicionalPage() {
         message={successMessage || 'Operação concluída.'}
         onClose={() => setSuccessModalOpen(false)}
         onPrimaryAction={() => setSuccessModalOpen(false)}
+      />
+      <ConfirmDialog
+        open={deleteModalOpen}
+        title="Excluir condicional"
+        description="Tem certeza que deseja excluir este condicional? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        cancelLabel="Cancelar"
+        isLoading={deletingId !== null && condicionalToDelete?.id === deletingId}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
       />
     </div>
   );
