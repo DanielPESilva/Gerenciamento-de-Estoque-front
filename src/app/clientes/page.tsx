@@ -13,6 +13,7 @@ import { clientesService } from '@/services/clientes.service';
 import { Client } from '@/types/client';
 import { Loader2, Trash2, UserPlus2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { AxiosError } from 'axios';
 
 const clientSchema = z.object({
   nome: z.string().min(3, 'Informe o nome completo'),
@@ -49,6 +50,8 @@ export default function ClientesPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [modalVariant, setModalVariant] = useState<'success' | 'error'>('success');
+  const [modalTitle, setModalTitle] = useState<string | undefined>();
   const [filterTerm, setFilterTerm] = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
@@ -103,11 +106,15 @@ export default function ClientesPage() {
 
       const created = await clientesService.create(sanitizedPayload);
       setClients((prev) => [created, ...prev]);
+      setModalVariant('success');
+      setModalTitle('Tudo certo!');
       setSuccessMessage('Cliente cadastrado com sucesso!');
       setSuccessModalOpen(true);
       reset();
     } catch (err: any) {
       console.error('Erro ao cadastrar cliente:', err);
+      setModalVariant('error');
+      setModalTitle('Não foi possível salvar');
 
       const backendErrors = err?.response?.data;
       const message = backendErrors?.message || backendErrors?.errors?.[0];
@@ -152,11 +159,30 @@ export default function ClientesPage() {
       setIsDeleting(true);
       await clientesService.delete(clientToDelete.id);
       setClients((prev) => prev.filter((c) => c.id !== clientToDelete.id));
+      setModalVariant('success');
+      setModalTitle('Tudo certo!');
       setSuccessMessage('Cliente removido com sucesso.');
       setSuccessModalOpen(true);
     } catch (err) {
       console.error('Erro ao remover cliente:', err);
-      setSuccessMessage('Não foi possível remover o cliente. Tente novamente.');
+      setModalVariant('error');
+      setModalTitle('Não foi possível remover');
+
+      let message = 'Não foi possível remover o cliente. Tente novamente.';
+      if (err && typeof err === 'object') {
+        const axiosError = err as AxiosError<{
+          message?: string;
+          errors?: Array<{ message?: string }>;
+        }>;
+        const apiMessage =
+          axiosError.response?.data?.errors?.[0]?.message ??
+          axiosError.response?.data?.message;
+        if (apiMessage) {
+          message = apiMessage;
+        }
+      }
+
+      setSuccessMessage(message);
       setSuccessModalOpen(true);
     } finally {
       setIsDeleting(false);
@@ -376,9 +402,21 @@ export default function ClientesPage() {
 
       <SuccessModal
         open={successModalOpen}
+        title={modalTitle}
         message={successMessage ?? 'Operação concluída.'}
-        onClose={() => setSuccessModalOpen(false)}
-        onPrimaryAction={() => setSuccessModalOpen(false)}
+        variant={modalVariant}
+        onClose={() => {
+          setSuccessModalOpen(false);
+          setSuccessMessage(null);
+          setModalVariant('success');
+          setModalTitle(undefined);
+        }}
+        onPrimaryAction={() => {
+          setSuccessModalOpen(false);
+          setSuccessMessage(null);
+          setModalVariant('success');
+          setModalTitle(undefined);
+        }}
       />
       <ConfirmDialog
         open={deleteModalOpen}
