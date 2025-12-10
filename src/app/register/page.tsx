@@ -48,6 +48,7 @@ export default function RegisterPage() {
     handleSubmit,
     formState: { errors },
     setValue,
+    setError: setFieldError,
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
   });
@@ -96,6 +97,7 @@ export default function RegisterPage() {
             
             if (errorMsg.includes('Email já está em uso') || errorMsg.includes('já está em uso')) {
               setError('Este email já está cadastrado. Tente fazer login ou use outro email.');
+              setFieldError('email', { type: 'manual', message: 'Este email já está cadastrado.' });
             } else {
               setError(errorMsg);
             }
@@ -107,6 +109,7 @@ export default function RegisterPage() {
         } else if (typeof errors === 'string') {
           if (errors.includes('Email já está em uso')) {
             setError('Este email já está cadastrado. Tente fazer login ou use outro email.');
+            setFieldError('email', { type: 'manual', message: 'Este email já está cadastrado.' });
           } else {
             setError(errors);
           }
@@ -120,8 +123,10 @@ export default function RegisterPage() {
         // Mensagens específicas
         if (message.includes('Email já está em uso') || message.includes('já está em uso')) {
           setError('Este email já está cadastrado. Tente fazer login ou use outro email.');
+          setFieldError('email', { type: 'manual', message: 'Este email já está cadastrado.' });
         } else if (message.includes('CPF') && message.includes('already')) {
           setError('Este CPF já está cadastrado no sistema.');
+          setFieldError('cpf', { type: 'manual', message: 'Este CPF já está cadastrado.' });
         } else if (message.includes('CNPJ') && message.includes('already')) {
           setError('Este CNPJ já está cadastrado no sistema.');
         } else {

@@ -1,4 +1,4 @@
-// File: /home/usuario/Área de trabalho/Gereciamento-de-estoque/Gerenciamento-de-Estoque-front/src/app/cadastrar-item/page.tsx
+// File: /home/usuario/Área de trabalho/TCC/Gerenciamento-de-Estoque-front/src/app/cadastrar-item/page.tsx
 import * as entry from '../../../../../src/app/cadastrar-item/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

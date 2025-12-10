@@ -4,7 +4,14 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface HeaderProps {
-  activePage?: 'estoque' | 'cadastrar-condicional' | 'preparar-venda' | 'meu-condicional' | 'cadastrar-item' | 'visualizar-item';
+  activePage?:
+    | 'estoque'
+    | 'cadastrar-condicional'
+    | 'preparar-venda'
+    | 'meu-condicional'
+    | 'clientes'
+    | 'cadastrar-item'
+    | 'visualizar-item';
 }
 
 export function Header({ activePage = 'estoque' }: HeaderProps) {
@@ -86,15 +93,15 @@ export function Header({ activePage = 'estoque' }: HeaderProps) {
             >
               Meu Condicional
             </button>
-            <button 
-              onClick={() => router.push('/cadastrar-item')}
+            <button
+              onClick={() => router.push('/clientes')}
               className={`transition ${
-                activePage === 'cadastrar-item' 
-                  ? 'text-white border-b-2 border-emerald-400' 
+                activePage === 'clientes'
+                  ? 'text-white border-b-2 border-emerald-400'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              Cadastrar Item
+              Cadastrar Cliente
             </button>
           </nav>
 

@@ -33,6 +33,21 @@ export const clientesService = {
 
     const response = await api.get<ClientsResponse>(`/clientes?${params.toString()}`);
     return response.data;
+  },
+
+  async create(payload: {
+    nome: string;
+    email?: string;
+    telefone?: string;
+    cpf?: string;
+    endereco?: string;
+  }): Promise<Client> {
+    const { data } = await api.post<Client>('/clientes', payload);
+    return data;
+  },
+
+  async delete(id: number): Promise<void> {
+    await api.delete(`/clientes/${id}`);
   }
 };
 
