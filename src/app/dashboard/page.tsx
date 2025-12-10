@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { itemsService } from '@/services/items.service';
 import { Item } from '@/types/item';
 import { Pencil, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AxiosError } from 'axios';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -27,6 +28,8 @@ export default function DashboardPage() {
   });
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [modalVariant, setModalVariant] = useState<'success' | 'error'>('success');
+  const [modalTitle, setModalTitle] = useState<string | undefined>();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<Item | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -125,11 +128,30 @@ export default function DashboardPage() {
       setIsDeleting(true);
       await itemsService.delete(itemToDelete.id);
       await loadItems();
+      setModalVariant('success');
+      setModalTitle('Tudo certo!');
       setSuccessMessage('Item excluído com sucesso!');
       setSuccessModalOpen(true);
     } catch (error) {
       console.error('Erro ao deletar item:', error);
-      setSuccessMessage('Erro ao deletar item.');
+      setModalVariant('error');
+
+      let message = 'Não foi possível excluir o item.';
+      if (error && typeof error === 'object') {
+        const axiosError = error as AxiosError<{
+          message?: string;
+          errors?: Array<{ message?: string }>;
+        }>;
+        const apiMessage =
+          axiosError.response?.data?.errors?.[0]?.message ??
+          axiosError.response?.data?.message;
+        if (apiMessage) {
+          message = apiMessage;
+        }
+      }
+
+      setModalTitle('Não foi possível excluir');
+      setSuccessMessage(message);
       setSuccessModalOpen(true);
     } finally {
       setIsDeleting(false);
@@ -408,8 +430,21 @@ export default function DashboardPage() {
       </main>
       <SuccessModal
         open={successModalOpen}
+        title={modalTitle}
         message={successMessage || 'Operação concluída.'}
-        onClose={() => setSuccessModalOpen(false)}
+        variant={modalVariant}
+        onPrimaryAction={() => {
+          setSuccessModalOpen(false);
+          setSuccessMessage('');
+          setModalTitle(undefined);
+          setModalVariant('success');
+        }}
+        onClose={() => {
+          setSuccessModalOpen(false);
+          setSuccessMessage('');
+          setModalTitle(undefined);
+          setModalVariant('success');
+        }}
       />
       <ConfirmDialog
         open={deleteDialogOpen}
