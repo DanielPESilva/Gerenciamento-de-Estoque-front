@@ -212,13 +212,8 @@ export default function PrepararVendaPage() {
 
     try {
       for (const { item, quantidade } of Object.values(selectedItems)) {
-        const quantidadeRestante = item.quantidade - quantidade;
-
-        if (quantidadeRestante <= 0) {
-          await itemsService.delete(item.id);
-        } else {
-          await itemsService.update(item.id, { quantidade: quantidadeRestante });
-        }
+        const quantidadeRestante = Math.max(item.quantidade - quantidade, 0);
+        await itemsService.update(item.id, { quantidade: quantidadeRestante });
       }
 
       setSelectedItems({});
