@@ -1,9 +1,7 @@
 {
+  "/login/page": "app/login/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/cadastrar-condicional/page": "app/cadastrar-condicional/page.js",
-  "/clientes/page": "app/clientes/page.js",
-  "/visualizar-item/[id]/page": "app/visualizar-item/[id]/page.js",
-  "/editar-item/[id]/page": "app/editar-item/[id]/page.js",
-  "/meu-condicional/page": "app/meu-condicional/page.js",
-  "/preparar-venda/page": "app/preparar-venda/page.js"
+  "/cadastrar-item/page": "app/cadastrar-item/page.js",
+  "/meu-perfil/page": "app/meu-perfil/page.js",
+  "/visualizar-item/[id]/page": "app/visualizar-item/[id]/page.js"
 }
