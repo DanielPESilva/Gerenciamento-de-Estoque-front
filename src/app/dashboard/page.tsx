@@ -70,12 +70,15 @@ export default function DashboardPage() {
           nome: item.nome.replace(/#\d+$/, '').trim()
         }));
 
-        // Filtrar por status (Disponível/Indisponível)
-        if (filters.status) {
+        const statusFilter = filters.status.trim().toLowerCase();
+        if (statusFilter) {
           itemsWithoutHash = itemsWithoutHash.filter(item => {
-            const itemStatus = item.quantidade > 0 ? 'Disponível' : 'Indisponível';
-            return itemStatus.toLowerCase().includes(filters.status.toLowerCase());
+            const itemStatus = item.quantidade > 0 ? 'disponível' : 'indisponível';
+            return itemStatus.includes(statusFilter);
           });
+        } else {
+          // Sem filtro explícito: mostrar apenas itens com estoque disponível
+          itemsWithoutHash = itemsWithoutHash.filter(item => item.quantidade > 0);
         }
 
         if (valorNum && !isNaN(valorNum)) {
@@ -85,10 +88,12 @@ export default function DashboardPage() {
         }
 
         console.log(`📊 Items encontrados: ${itemsWithoutHash.length}`);
-        
+
         setItems(itemsWithoutHash);
-        setTotalPages(response.pagination.totalPages);
-        setTotalItems(response.pagination.total);
+        const pageLimit = response.pagination.limit ?? 10;
+        const totalFiltered = itemsWithoutHash.length;
+        setTotalItems(totalFiltered);
+        setTotalPages(Math.max(1, Math.ceil(totalFiltered / pageLimit)));
       } else {
         console.error('❌ Erro na resposta da API:', response);
       }
