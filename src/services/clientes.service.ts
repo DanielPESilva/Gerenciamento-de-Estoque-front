@@ -17,7 +17,18 @@ export interface ClientsResponse {
     limit: number;
     total: number;
     totalPages: number;
+    hasNext?: boolean;
+    hasPrev?: boolean;
   };
+}
+
+interface ApiResponse<T> {
+  data: T;
+  pagination?: ClientsResponse['pagination'];
+  error: boolean;
+  code: number;
+  message: string;
+  errors: Array<{ message: string }>;
 }
 
 export const clientesService = {
@@ -31,8 +42,24 @@ export const clientesService = {
     if (filters.cpf) params.append('cpf', filters.cpf);
     if (filters.telefone) params.append('telefone', filters.telefone);
 
-    const response = await api.get<ClientsResponse>(`/clientes?${params.toString()}`);
-    return response.data;
+    const response = await api.get<ApiResponse<Client[]>>(`/clientes?${params.toString()}`);
+    const { data, pagination } = response.data;
+
+    const items = Array.isArray(data) ? data : [];
+    const resolvedPagination: ClientsResponse['pagination'] =
+      pagination ?? {
+        page: filters.page ?? 1,
+        limit: filters.limit ?? items.length,
+        total: items.length,
+        totalPages: 1,
+        hasNext: false,
+        hasPrev: false
+      };
+
+    return {
+      data: items,
+      pagination: resolvedPagination
+    };
   },
 
   async create(payload: {
@@ -42,8 +69,8 @@ export const clientesService = {
     cpf?: string;
     endereco?: string;
   }): Promise<Client> {
-    const { data } = await api.post<Client>('/clientes', payload);
-    return data;
+    const response = await api.post<ApiResponse<Client>>('/clientes', payload);
+    return response.data.data;
   },
 
   async delete(id: number): Promise<void> {
