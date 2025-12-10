@@ -20,6 +20,14 @@ export interface ClientsResponse {
   };
 }
 
+interface ApiResponse<T> {
+  data: T;
+  error: boolean;
+  message: string;
+  code: number;
+  errors: Array<{ message: string }>;
+}
+
 export const clientesService = {
   async getAll(filters: ClientFilters = {}): Promise<ClientsResponse> {
     const params = new URLSearchParams();
@@ -31,8 +39,8 @@ export const clientesService = {
     if (filters.cpf) params.append('cpf', filters.cpf);
     if (filters.telefone) params.append('telefone', filters.telefone);
 
-    const response = await api.get<ClientsResponse>(`/clientes?${params.toString()}`);
-    return response.data;
+    const response = await api.get<ApiResponse<ClientsResponse>>(`/clientes?${params.toString()}`);
+    return response.data.data;
   },
 
   async create(payload: {
@@ -42,8 +50,8 @@ export const clientesService = {
     cpf?: string;
     endereco?: string;
   }): Promise<Client> {
-    const { data } = await api.post<Client>('/clientes', payload);
-    return data;
+    const response = await api.post<ApiResponse<Client>>('/clientes', payload);
+    return response.data.data;
   },
 
   async delete(id: number): Promise<void> {
