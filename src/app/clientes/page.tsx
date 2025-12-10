@@ -104,8 +104,8 @@ export default function ClientesPage() {
         endereco: data.endereco?.trim() || undefined
       };
 
-      const created = await clientesService.create(sanitizedPayload);
-      setClients((prev) => [created, ...prev]);
+      await clientesService.create(sanitizedPayload);
+      await loadClients();
       setModalVariant('success');
       setModalTitle('Tudo certo!');
       setSuccessMessage('Cliente cadastrado com sucesso!');
@@ -163,6 +163,7 @@ export default function ClientesPage() {
       setModalTitle('Tudo certo!');
       setSuccessMessage('Cliente removido com sucesso.');
       setSuccessModalOpen(true);
+      await loadClients();
     } catch (err) {
       console.error('Erro ao remover cliente:', err);
       setModalVariant('error');
