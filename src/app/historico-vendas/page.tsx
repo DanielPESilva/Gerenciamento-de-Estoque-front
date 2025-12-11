@@ -143,6 +143,19 @@ export default function HistoricoVendasPage() {
       return [];
     }
 
+    if (selectedFilter === 'custom') {
+      if (!customRange) {
+        return history;
+      }
+      return history.filter((entry) => {
+        const timestamp = new Date(entry.timestamp).getTime();
+        return (
+          timestamp >= customRange.start.getTime() &&
+          timestamp <= customRange.end.getTime()
+        );
+      });
+    }
+
     const rangeStart = getRangeStart(selectedFilter);
 
     if (!rangeStart) {
@@ -152,7 +165,7 @@ export default function HistoricoVendasPage() {
     return history.filter(
       (entry) => new Date(entry.timestamp).getTime() >= rangeStart.getTime()
     );
-  }, [history, selectedFilter]);
+  }, [history, selectedFilter, customRange]);
 
   const totalAmount = useMemo(
     () => filteredHistory.reduce((total, entry) => total + getEntryAmount(entry), 0),
@@ -193,7 +206,12 @@ export default function HistoricoVendasPage() {
                 <Button
                   key={option.value}
                   variant={selectedFilter === option.value ? 'default' : 'outline'}
-                  onClick={() => setSelectedFilter(option.value)}
+                  onClick={() => {
+                    setSelectedFilter(option.value);
+                    if (option.value !== 'custom') {
+                      setCustomRange(null);
+                    }
+                  }}
                   className={
                     selectedFilter === option.value
                       ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
@@ -203,6 +221,55 @@ export default function HistoricoVendasPage() {
                   {option.label}
                 </Button>
               ))}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-[repeat(3,minmax(0,1fr))]">
+            <div className="flex flex-col">
+              <label htmlFor="custom-start" className="text-xs font-medium text-gray-600">
+                Início do período
+              </label>
+              <input
+                id="custom-start"
+                type="date"
+                value={customStart}
+                onChange={(event) => setCustomStart(event.target.value)}
+                className="mt-1 rounded-lg border border-emerald-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                max={customEnd || undefined}
+              />
+            </div>
+            <div className="flex flex-col">
+              <label htmlFor="custom-end" className="text-xs font-medium text-gray-600">
+                Final do período
+              </label>
+              <input
+                id="custom-end"
+                type="date"
+                value={customEnd}
+                onChange={(event) => setCustomEnd(event.target.value)}
+                className="mt-1 rounded-lg border border-emerald-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                min={customStart || undefined}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
+                onClick={() => {
+                  if (!customStart || !customEnd) {
+                    return;
+                  }
+                  const start = new Date(customStart);
+                  start.setHours(0, 0, 0, 0);
+                  const end = new Date(customEnd);
+                  end.setHours(23, 59, 59, 999);
+                  setCustomRange({ start, end });
+                  setSelectedFilter('custom');
+                }}
+                disabled={!customStart || !customEnd}
+              >
+                Aplicar intervalo
+              </Button>
             </div>
           </div>
         </section>
