@@ -21,7 +21,7 @@ type SaleHistoryEntry = {
   details: SaleHistoryDetail[];
 };
 
-type FilterRange = 'all' | 'day' | 'week' | 'month' | 'year';
+type FilterRange = 'all' | 'day' | 'week' | 'month' | 'year' | 'custom';
 
 const FILTER_OPTIONS: { value: FilterRange; label: string }[] = [
   { value: 'all', label: 'Todas' },
@@ -53,6 +53,7 @@ const getRangeStart = (filter: FilterRange): Date | null => {
     case 'year': {
       return new Date(now.getFullYear(), 0, 1);
     }
+    case 'custom':
     case 'all':
     default:
       return null;
@@ -87,6 +88,11 @@ const getEntryAmount = (entry: SaleHistoryEntry) =>
 export default function HistoricoVendasPage() {
   const [history, setHistory] = useState<SaleHistoryEntry[]>([]);
   const [selectedFilter, setSelectedFilter] = useState<FilterRange>('month');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [customRange, setCustomRange] = useState<{ start: Date; end: Date } | null>(
+    null
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -143,7 +149,7 @@ export default function HistoricoVendasPage() {
       return [];
     }
 
-    if (selectedFilter === ('custom' as FilterRange)) {
+    if (selectedFilter === 'custom') {
       if (!customRange) {
         return history;
       }
