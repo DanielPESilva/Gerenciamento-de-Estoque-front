@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { clientesService } from '@/services/clientes.service';
 import { Client } from '@/types/client';
-import { Loader2, Trash2, UserPlus2 } from 'lucide-react';
+import { Loader2, Trash2, UserPlus2, Pencil } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { AxiosError } from 'axios';
 
@@ -56,6 +56,8 @@ export default function ClientesPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
 
   const {
     register,
@@ -100,21 +102,41 @@ export default function ClientesPage() {
         nome: data.nome.trim(),
         email: data.email?.trim() || undefined,
         telefone: data.telefone?.trim() || undefined,
-        cpf: data.cpf?.replace(/\D/g, ''),
+        cpf: data.cpf ? data.cpf.replace(/\D/g, '') : undefined,
         endereco: data.endereco?.trim() || undefined
       };
 
-      await clientesService.create(sanitizedPayload);
-      await loadClients();
-      setModalVariant('success');
-      setModalTitle('Tudo certo!');
-      setSuccessMessage('Cliente cadastrado com sucesso!');
-      setSuccessModalOpen(true);
-      reset();
+      if (isEditing && clientToEdit) {
+        const updated = await clientesService.update(clientToEdit.id, {
+          ...sanitizedPayload,
+          email: sanitizedPayload.email ?? null,
+          telefone: sanitizedPayload.telefone ?? null,
+          cpf: sanitizedPayload.cpf ?? null,
+          endereco: sanitizedPayload.endereco ?? null
+        });
+        setClients((prev) =>
+          prev.map((client) =>
+            client.id === clientToEdit.id ? { ...client, ...updated } : client
+          )
+        );
+        setModalVariant('success');
+        setModalTitle('Tudo certo!');
+        setSuccessMessage('Cliente atualizado com sucesso!');
+        setSuccessModalOpen(true);
+        handleCancelEdit();
+      } else {
+        await clientesService.create(sanitizedPayload);
+        await loadClients();
+        setModalVariant('success');
+        setModalTitle('Tudo certo!');
+        setSuccessMessage('Cliente cadastrado com sucesso!');
+        setSuccessModalOpen(true);
+        reset();
+      }
     } catch (err: any) {
-      console.error('Erro ao cadastrar cliente:', err);
+      console.error(isEditing ? 'Erro ao atualizar cliente:' : 'Erro ao cadastrar cliente:', err);
       setModalVariant('error');
-      setModalTitle('Não foi possível salvar');
+      setModalTitle(isEditing ? 'Não foi possível atualizar' : 'Não foi possível salvar');
 
       const backendErrors = err?.response?.data;
       const message = backendErrors?.message || backendErrors?.errors?.[0];
@@ -128,11 +150,34 @@ export default function ClientesPage() {
           setError(message);
         }
       } else {
-        setError('Erro ao salvar cliente. Revise as informações e tente novamente.');
+        setError(
+          isEditing
+            ? 'Erro ao atualizar cliente. Revise as informações e tente novamente.'
+            : 'Erro ao salvar cliente. Revise as informações e tente novamente.'
+        );
       }
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleEditClient = (client: Client) => {
+    reset({
+      nome: client.nome ?? '',
+      email: client.email ?? '',
+      telefone: client.telefone ?? '',
+      cpf: client.cpf ?? '',
+      endereco: client.endereco ?? ''
+    });
+    setClientToEdit(client);
+    setIsEditing(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    reset();
+    setIsEditing(false);
+    setClientToEdit(null);
   };
 
   const filteredClients = useMemo(() => {
@@ -150,6 +195,10 @@ export default function ClientesPage() {
   const handleDeleteRequest = (client: Client) => {
     setClientToDelete(client);
     setDeleteModalOpen(true);
+  };
+
+  const handleSubmitEditing = (data: ClientFormData) => {
+    onSubmit(data);
   };
 
   const handleConfirmDelete = async () => {
@@ -212,10 +261,12 @@ export default function ClientesPage() {
           <section className="rounded-lg bg-white p-6 shadow">
             <header className="mb-6 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                <UserPlus2 size={20} />
+                {isEditing ? <Pencil size={20} /> : <UserPlus2 size={20} />}
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-800">Cadastrar novo cliente</h2>
+                <h2 className="text-lg font-semibold text-gray-800">
+                  {isEditing ? 'Editar cliente' : 'Cadastrar novo cliente'}
+                </h2>
                 <p className="text-sm text-gray-500">
                   Nome é obrigatório; demais campos aceleram a comunicação com o cliente.
                 </p>
@@ -228,7 +279,10 @@ export default function ClientesPage() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            <form
+              onSubmit={handleSubmit(handleSubmitEditing)}
+              className="space-y-5"
+            >
               <div className="space-y-2">
                 <Label htmlFor="nome">Nome completo</Label>
                 <Input
@@ -302,13 +356,26 @@ export default function ClientesPage() {
                 </div>
               </div>
 
-              <Button
-                type="submit"
-                className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
-                disabled={isSaving}
-              >
-                {isSaving ? 'Salvando...' : 'Cadastrar cliente'}
-              </Button>
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              {isEditing && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="sm:w-auto"
+                  onClick={handleCancelEdit}
+                  disabled={isSaving}
+                >
+                  Cancelar edição
+                </Button>
+              )}
+                <Button
+                  type="submit"
+                  className="w-full bg-emerald-500 text-white hover:bg-emerald-600 sm:w-auto"
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Cadastrar cliente'}
+                </Button>
+              </div>
             </form>
           </section>
 
@@ -382,13 +449,22 @@ export default function ClientesPage() {
                               : '—'}
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <button
-                              onClick={() => handleDeleteRequest(client)}
-                              className="inline-flex items-center rounded-md border border-transparent bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-100 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
-                            >
-                              <Trash2 size={14} className="mr-1" />
-                              Remover
-                            </button>
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => handleEditClient(client)}
+                                className="inline-flex items-center rounded-md border border-transparent bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-100 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                              >
+                                <Pencil size={14} className="mr-1" />
+                                Editar
+                              </button>
+                              <button
+                                onClick={() => handleDeleteRequest(client)}
+                                className="inline-flex items-center rounded-md border border-transparent bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-100 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+                              >
+                                <Trash2 size={14} className="mr-1" />
+                                Remover
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

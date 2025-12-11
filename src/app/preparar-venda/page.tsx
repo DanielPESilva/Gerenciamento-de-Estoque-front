@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,32 @@ const initialFilterState: FilterState = {
   cor: ''
 };
 
+type SaleHistoryDetail = {
+  id: number;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+};
+
+type SaleHistoryEntry = {
+  timestamp: string;
+  items: number;
+  amount: number;
+  method: string;
+  details: SaleHistoryDetail[];
+};
+
+const getHistoryItems = (entry: SaleHistoryEntry) =>
+  entry.details.length
+    ? entry.details.reduce((total, detail) => total + detail.quantity, 0)
+    : entry.items;
+
+const getHistoryAmount = (entry: SaleHistoryEntry) =>
+  entry.details.length
+    ? entry.details.reduce((total, detail) => total + detail.subtotal, 0)
+    : entry.amount;
+
 export default function PrepararVendaPage() {
   const router = useRouter();
 
@@ -41,15 +68,33 @@ export default function PrepararVendaPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [processingSale, setProcessingSale] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('Pix');
-  const [salesHistory, setSalesHistory] = useState<
-    { timestamp: string; items: number; amount: number; method: string }[]
-  >([]);
+  const [salesHistory, setSalesHistory] = useState<SaleHistoryEntry[]>([]);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const stored = localStorage.getItem('dressfy-sales-history');
     if (!stored) return;
     try {
-      setSalesHistory(JSON.parse(stored));
+      const parsed: SaleHistoryEntry[] = JSON.parse(stored).map(
+        (entry: Partial<SaleHistoryEntry>): SaleHistoryEntry => ({
+          timestamp: entry.timestamp ?? new Date().toISOString(),
+          items: entry.items ?? 0,
+          amount: entry.amount ?? 0,
+          method: entry.method ?? 'Desconhecido',
+          details:
+            entry.details?.map((detail) => ({
+              id: detail?.id ?? 0,
+              name: detail?.name ?? 'Item',
+              quantity: detail?.quantity ?? 0,
+              unitPrice: detail?.unitPrice ?? 0,
+              subtotal: detail?.subtotal ?? 0
+            })) ?? []
+        })
+      );
+      parsed.sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      setSalesHistory(parsed);
     } catch (err) {
       console.error('Erro ao carregar histórico de vendas:', err);
     }
@@ -219,15 +264,32 @@ export default function PrepararVendaPage() {
       setSelectedItems({});
       await loadItems(currentPage);
 
-      const saleEntry = {
+      const saleDetails: SaleHistoryDetail[] = Object.values(selectedItems).map(
+        ({ item, quantidade }) => ({
+          id: item.id,
+          name: item.nome.replace(/#\d+$/, '').trim(),
+          quantity: quantidade,
+          unitPrice: item.preco,
+          subtotal: item.preco * quantidade
+        })
+      );
+
+      const saleEntry: SaleHistoryEntry = {
         timestamp: new Date().toISOString(),
         items: totalQuantidade,
         amount: totalValor,
-        method: paymentMethod
+        method: paymentMethod,
+        details: saleDetails
       };
 
       setSalesHistory((prev) => {
-        const updated = [saleEntry, ...prev].slice(0, 3);
+        const updated = [saleEntry, ...prev]
+          .sort(
+            (a, b) =>
+              new Date(b.timestamp).getTime() -
+              new Date(a.timestamp).getTime()
+          )
+          .slice(0, 200);
         if (typeof window !== 'undefined') {
           localStorage.setItem('dressfy-sales-history', JSON.stringify(updated));
         }
@@ -442,16 +504,28 @@ Método de pagamento: ${paymentMethod}`);
           </div>
         </section>
 
-        {salesHistory.length > 0 && (
-          <section className="mb-8 rounded-lg bg-white p-6 shadow">
-            <h2 className="mb-4 text-lg font-semibold text-gray-700">Últimas vendas</h2>
+        <section className="mb-8 rounded-lg bg-white p-6 shadow">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-700">Últimas vendas</h2>
+            <Link
+              href="/historico-vendas"
+              className="text-sm font-semibold text-emerald-600 transition hover:text-emerald-700"
+            >
+              Ver histórico completo
+            </Link>
+          </div>
+          {salesHistory.length === 0 ? (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+              Nenhuma venda registrada recentemente.
+            </div>
+          ) : (
             <div className="space-y-3">
-              {salesHistory.map((sale) => (
+              {salesHistory.slice(0, 3).map((sale, index) => (
                 <div
-                  key={sale.timestamp}
-                  className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 sm:flex-row sm:items-center sm:justify-between"
+                  key={`${sale.timestamp}-${index}`}
+                  className="flex flex-col gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-sm sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div className="font-medium text-gray-800">
+                  <div className="font-medium text-emerald-800">
                     {new Date(sale.timestamp).toLocaleString('pt-BR', {
                       day: '2-digit',
                       month: '2-digit',
@@ -460,16 +534,24 @@ Método de pagamento: ${paymentMethod}`);
                       minute: '2-digit'
                     })}
                   </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span>Itens: {sale.items}</span>
-                    <span>Valor: {formatCurrency(sale.amount)}</span>
-                    <span>Método: {sale.method}</span>
+                  <div className="flex flex-wrap items-center gap-3 text-emerald-700">
+                    <span>
+                      Itens:{' '}
+                      <strong>{getHistoryItems(sale)}</strong>
+                    </span>
+                    <span>
+                      Valor:{' '}
+                      <strong>{formatCurrency(getHistoryAmount(sale))}</strong>
+                    </span>
+                    <span>
+                      Método: <strong>{sale.method}</strong>
+                    </span>
                   </div>
                 </div>
               ))}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]">
           {/* Items list */}

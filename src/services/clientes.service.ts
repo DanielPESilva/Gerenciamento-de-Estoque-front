@@ -73,6 +73,17 @@ export const clientesService = {
     return response.data.data;
   },
 
+  async update(id: number, payload: {
+    nome?: string;
+    email?: string | null;
+    telefone?: string | null;
+    cpf?: string | null;
+    endereco?: string | null;
+  }): Promise<Client> {
+    const response = await api.patch<ApiResponse<Client>>(`/clientes/${id}`, payload);
+    return response.data.data;
+  },
+
   async delete(id: number): Promise<void> {
     await api.delete(`/clientes/${id}`);
   }
