@@ -143,7 +143,7 @@ export default function HistoricoVendasPage() {
       return [];
     }
 
-    if (selectedFilter === 'custom') {
+    if (selectedFilter === ('custom' as FilterRange)) {
       if (!customRange) {
         return history;
       }
