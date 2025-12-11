@@ -64,22 +64,25 @@ export const clientesService = {
 
   async create(payload: {
     nome: string;
-    email?: string;
-    telefone?: string;
-    cpf?: string;
-    endereco?: string;
+    email: string;
+    telefone: string;
+    cpf: string;
+    endereco: string;
   }): Promise<Client> {
     const response = await api.post<ApiResponse<Client>>('/clientes', payload);
     return response.data.data;
   },
 
-  async update(id: number, payload: {
-    nome?: string;
-    email?: string | null;
-    telefone?: string | null;
-    cpf?: string | null;
-    endereco?: string | null;
-  }): Promise<Client> {
+  async update(
+    id: number,
+    payload: {
+      nome: string;
+      email: string;
+      telefone: string;
+      cpf: string;
+      endereco: string;
+    }
+  ): Promise<Client> {
     const response = await api.patch<ApiResponse<Client>>(`/clientes/${id}`, payload);
     return response.data.data;
   },

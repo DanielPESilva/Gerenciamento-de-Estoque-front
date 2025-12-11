@@ -39,28 +39,33 @@ const initialFilterState: FilterState = {
 };
 
 const quickClientSchema = z.object({
-  nome: z.string().min(3, 'Informe o nome completo'),
+  nome: z
+    .string()
+    .trim()
+    .min(3, 'Informe o nome completo'),
   telefone: z
     .string()
     .trim()
-    .optional()
-    .refine((value) => !value || value.replace(/\D/g, '').length >= 10, {
+    .min(1, 'Telefone é obrigatório')
+    .refine((value) => value.replace(/\D/g, '').length >= 10, {
       message: 'Telefone deve conter DDD + número'
     }),
   email: z
     .string()
     .trim()
-    .optional()
-    .refine((value) => !value || z.string().email().safeParse(value).success, {
-      message: 'Email inválido'
-    }),
+    .min(1, 'E-mail é obrigatório')
+    .email('Email inválido'),
   cpf: z
     .string()
     .trim()
-    .optional()
-    .refine((value) => !value || value.replace(/\D/g, '').length === 11, {
+    .min(1, 'CPF é obrigatório')
+    .refine((value) => value.replace(/\D/g, '').length === 11, {
       message: 'CPF deve ter 11 dígitos'
-    })
+    }),
+  endereco: z
+    .string()
+    .trim()
+    .min(5, 'Endereço é obrigatório')
 });
 
 type QuickClientFormData = z.infer<typeof quickClientSchema>;
@@ -103,14 +108,17 @@ export default function CadastrarCondicionalPage() {
     handleSubmit: handleQuickClientSubmit,
     reset: resetQuickClient,
     setError: setQuickClientError,
-    formState: { errors: quickClientErrors }
+    formState: { errors: quickClientErrors, isValid: isQuickClientValid }
   } = useForm<QuickClientFormData>({
     resolver: zodResolver(quickClientSchema),
+    mode: 'onChange',
+    reValidateMode: 'onChange',
     defaultValues: {
       nome: '',
       telefone: '',
       email: '',
-      cpf: ''
+      cpf: '',
+      endereco: ''
     }
   });
 
@@ -307,9 +315,10 @@ export default function CadastrarCondicionalPage() {
     try {
       const payload = {
         nome: data.nome.trim(),
-        telefone: data.telefone?.trim() || undefined,
-        email: data.email?.trim() || undefined,
-        cpf: data.cpf?.replace(/\D/g, '') || undefined
+        telefone: data.telefone.trim(),
+        email: data.email.trim(),
+        cpf: data.cpf.replace(/\D/g, ''),
+        endereco: data.endereco.trim()
       };
 
       const createdClient = await clientesService.create(payload);
@@ -327,6 +336,12 @@ export default function CadastrarCondicionalPage() {
           setQuickClientError('email', { message: backendMessage });
         } else if (backendMessage.toLowerCase().includes('cpf')) {
           setQuickClientError('cpf', { message: backendMessage });
+        } else if (backendMessage.toLowerCase().includes('telefone')) {
+          setQuickClientError('telefone', { message: backendMessage });
+        } else if (backendMessage.toLowerCase().includes('endereço') || backendMessage.toLowerCase().includes('endereco')) {
+          setQuickClientError('endereco', { message: backendMessage });
+        } else if (backendMessage.toLowerCase().includes('nome')) {
+          setQuickClientError('nome', { message: backendMessage });
         } else {
           setSuccessMessage(backendMessage);
           setSuccessModalOpen(true);
@@ -753,9 +768,9 @@ export default function CadastrarCondicionalPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto]">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="quick-cpf">CPF (opcional)</Label>
+                    <Label htmlFor="quick-cpf">CPF</Label>
                     <Input
                       id="quick-cpf"
                       placeholder="00000000000"
@@ -767,17 +782,29 @@ export default function CadastrarCondicionalPage() {
                       <p className="text-xs text-red-500">{quickClientErrors.cpf.message}</p>
                     )}
                   </div>
-                  <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-700">
-                    <p>
-                      O cliente será disponibilizado imediatamente para seleção no condicional.
-                    </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="quick-endereco">Endereço</Label>
+                    <Input
+                      id="quick-endereco"
+                      placeholder="Rua Exemplo, 123 - Centro"
+                      autoComplete="street-address"
+                      {...registerQuickClient('endereco')}
+                      disabled={isCreatingClient}
+                    />
+                    {quickClientErrors.endereco && (
+                      <p className="text-xs text-red-500">{quickClientErrors.endereco.message}</p>
+                    )}
                   </div>
+                </div>
+
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-700">
+                  <p>O cliente será disponibilizado imediatamente para seleção no condicional.</p>
                 </div>
 
                 <Button
                   type="submit"
                   className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
-                  disabled={isCreatingClient}
+                  disabled={isCreatingClient || !isQuickClientValid}
                 >
                   {isCreatingClient ? 'Salvando...' : 'Cadastrar cliente'}
                 </Button>
