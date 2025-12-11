@@ -16,29 +16,33 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { AxiosError } from 'axios';
 
 const clientSchema = z.object({
-  nome: z.string().min(3, 'Informe o nome completo'),
+  nome: z
+    .string()
+    .trim()
+    .min(3, 'Informe o nome completo'),
   email: z
     .string()
     .trim()
-    .optional()
-    .refine((value) => !value || z.string().email().safeParse(value).success, {
-      message: 'Email inválido'
-    }),
+    .min(1, 'E-mail é obrigatório')
+    .email('E-mail inválido'),
   telefone: z
     .string()
     .trim()
-    .optional()
-    .refine((value) => !value || value.replace(/\D/g, '').length >= 10, {
+    .min(1, 'Telefone é obrigatório')
+    .refine((value) => value.replace(/\D/g, '').length >= 10, {
       message: 'Telefone deve conter DDD + número'
     }),
   cpf: z
     .string()
     .trim()
-    .optional()
-    .refine((value) => !value || value.replace(/\D/g, '').length === 11, {
+    .min(1, 'CPF é obrigatório')
+    .refine((value) => value.replace(/\D/g, '').length === 11, {
       message: 'CPF deve ter 11 dígitos'
     }),
-  endereco: z.string().trim().optional()
+  endereco: z
+    .string()
+    .trim()
+    .min(5, 'Endereço é obrigatório')
 });
 
 type ClientFormData = z.infer<typeof clientSchema>;
@@ -64,9 +68,12 @@ export default function ClientesPage() {
     handleSubmit,
     reset,
     setError: setFormError,
-    formState: { errors }
+    trigger,
+    formState: { errors, isValid, isSubmitting }
   } = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
+    mode: 'onChange',
+    reValidateMode: 'onChange',
     defaultValues: {
       nome: '',
       email: '',
@@ -100,19 +107,15 @@ export default function ClientesPage() {
     try {
       const sanitizedPayload = {
         nome: data.nome.trim(),
-        email: data.email?.trim() || undefined,
-        telefone: data.telefone?.trim() || undefined,
-        cpf: data.cpf ? data.cpf.replace(/\D/g, '') : undefined,
-        endereco: data.endereco?.trim() || undefined
+        email: data.email.trim(),
+        telefone: data.telefone.trim(),
+        cpf: data.cpf.replace(/\D/g, ''),
+        endereco: data.endereco.trim()
       };
 
       if (isEditing && clientToEdit) {
         const updated = await clientesService.update(clientToEdit.id, {
-          ...sanitizedPayload,
-          email: sanitizedPayload.email ?? null,
-          telefone: sanitizedPayload.telefone ?? null,
-          cpf: sanitizedPayload.cpf ?? null,
-          endereco: sanitizedPayload.endereco ?? null
+          ...sanitizedPayload
         });
         setClients((prev) =>
           prev.map((client) =>
@@ -146,6 +149,12 @@ export default function ClientesPage() {
           setFormError('email', { message });
         } else if (message.toLowerCase().includes('cpf')) {
           setFormError('cpf', { message });
+        } else if (message.toLowerCase().includes('telefone')) {
+          setFormError('telefone', { message });
+        } else if (message.toLowerCase().includes('endereço') || message.toLowerCase().includes('endereco')) {
+          setFormError('endereco', { message });
+        } else if (message.toLowerCase().includes('nome')) {
+          setFormError('nome', { message });
         } else {
           setError(message);
         }
@@ -169,6 +178,7 @@ export default function ClientesPage() {
       cpf: client.cpf ?? '',
       endereco: client.endereco ?? ''
     });
+    void trigger();
     setClientToEdit(client);
     setIsEditing(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -268,7 +278,7 @@ export default function ClientesPage() {
                   {isEditing ? 'Editar cliente' : 'Cadastrar novo cliente'}
                 </h2>
                 <p className="text-sm text-gray-500">
-                  Nome é obrigatório; demais campos aceleram a comunicação com o cliente.
+                  Todos os campos são obrigatórios para contato e identificação do cliente.
                 </p>
               </div>
             </header>
@@ -371,7 +381,7 @@ export default function ClientesPage() {
                 <Button
                   type="submit"
                   className="w-full bg-emerald-500 text-white hover:bg-emerald-600 sm:w-auto"
-                  disabled={isSaving}
+                  disabled={isSaving || !isValid || isSubmitting}
                 >
                   {isSaving ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Cadastrar cliente'}
                 </Button>
