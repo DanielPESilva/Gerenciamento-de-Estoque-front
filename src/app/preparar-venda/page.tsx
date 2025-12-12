@@ -12,7 +12,18 @@ import { clientesService } from '@/services/clientes.service';
 import { Item } from '@/types/item';
 import { Client } from '@/types/client';
 import { SaleItem } from '@/types/sale';
-import { CheckCircle2, CreditCard, Loader2, Minus, Plus, Trash2, X, ChevronDown, Check } from 'lucide-react';
+import {
+  CheckCircle2,
+  CreditCard,
+  Loader2,
+  Minus,
+  Plus,
+  Trash2,
+  X,
+  ChevronDown,
+  Check,
+  UserPlus2
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FilterState {
@@ -325,24 +336,33 @@ export default function PrepararVendaPage() {
       .toLowerCase();
   }, []);
 
+  const sanitizeDigits = useCallback((value: string | null | undefined) => {
+    return (value ?? '').replace(/\D/g, '');
+  }, []);
+
   const filteredClients = useMemo(() => {
     if (!clientSearch.trim()) {
       return clients;
     }
-    const term = normalizeText(clientSearch);
+    const termNormalized = normalizeText(clientSearch);
+    const termDigits = sanitizeDigits(clientSearch);
+
     return clients.filter((client) => {
       const name = normalizeText(client.nome ?? '');
-      const phone = normalizeText(String(client.telefone ?? ''));
       const email = normalizeText(client.email ?? '');
-      const cpf = normalizeText(String(client.cpf ?? ''));
-      return (
-        name.includes(term) ||
-        phone.includes(term) ||
-        email.includes(term) ||
-        cpf.includes(term)
-      );
+      const phoneDigits = sanitizeDigits(client.telefone);
+      const cpfDigits = sanitizeDigits(client.cpf);
+
+      const matchesText =
+        name.includes(termNormalized) || email.includes(termNormalized);
+
+      const matchesDigits =
+        termDigits.length > 0 &&
+        (phoneDigits.includes(termDigits) || cpfDigits.includes(termDigits));
+
+      return matchesText || matchesDigits;
     });
-  }, [clientSearch, clients, normalizeText]);
+  }, [clientSearch, clients, normalizeText, sanitizeDigits]);
 
   const selectedClient = useMemo(
     () => clients.find((client) => client.id === selectedClientId) ?? null,
@@ -884,60 +904,117 @@ Cliente: ${selectedClient.nome}`);
                   Limpar seleção de cliente
                 </button>
               </div>
-              <Input
-                placeholder="Buscar por nome, e-mail ou telefone"
-                value={clientSearch}
-                onChange={(event) => setClientSearch(event.target.value)}
-                className="max-w-full"
-                disabled={clientsLoading}
-              />
-              <div className="max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+              <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <Input
+                    placeholder="Buscar por nome, e-mail, telefone ou CPF"
+                    value={clientSearch}
+                    onChange={(event) => setClientSearch(event.target.value)}
+                    className="sm:max-w-xs"
+                    disabled={clientsLoading}
+                  />
+                  <div className="flex gap-2 text-xs text-gray-500">
+                    <span>Total cadastrados: {clients.length}</span>
+                    {selectedClient && (
+                      <span className="text-emerald-600">
+                        Cliente selecionado: {selectedClient.nome}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-100">
                 {clientsLoading ? (
-                  <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-500">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Carregando clientes...
-                  </div>
-                ) : filteredClients.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-gray-500">
-                    {clientSearch.trim()
-                      ? 'Nenhum cliente encontrado com o termo informado.'
-                      : 'Nenhum cliente cadastrado. Cadastre novos clientes para selecioná-los aqui.'}
-                  </div>
-                ) : (
-                  <div className="divide-y divide-gray-100">
-                    {filteredClients.slice(0, 50).map((client) => {
-                      const isActive = client.id === selectedClientId;
-                      return (
-                        <button
-                          key={client.id}
-                          type="button"
-                          onClick={() => setSelectedClientId(client.id)}
-                          className={cn(
-                            'flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition',
-                            isActive
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'hover:bg-gray-50'
-                          )}
-                        >
-                          <div>
-                            <p className="text-sm font-medium">
-                              {client.nome}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {client.email ?? 'Sem e-mail'}{' '}
-                              {client.telefone ? `• ${client.telefone}` : ''}
-                            </p>
-                          </div>
-                          {isActive && <Check className="h-4 w-4 text-emerald-600" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                    <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-500">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Carregando clientes...
+                    </div>
+                  ) : filteredClients.length === 0 ? (
+                    <div className="px-6 py-10 text-center text-sm text-gray-500">
+                      {clients.length === 0
+                        ? 'Nenhum cliente cadastrado. Utilize o botão abaixo para cadastrar.'
+                        : 'Nenhum cliente encontrado com o termo informado.'}
+                    </div>
+                  ) : (
+                    <div className="max-h-72 overflow-y-auto">
+                      <table className="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                          <tr>
+                            <th className="px-4 py-3 text-left font-semibold">Nome</th>
+                            <th className="px-4 py-3 text-left font-semibold">Contato</th>
+                            <th className="px-4 py-3 text-left font-semibold">CPF</th>
+                            <th className="px-4 py-3 text-right font-semibold">
+                              Selecionar
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 bg-white">
+                          {filteredClients.map((client) => {
+                            const isActive = client.id === selectedClientId;
+                            return (
+                              <tr
+                                key={client.id ?? `${client.nome}-${client.email}`}
+                                className={cn(
+                                  'transition hover:bg-gray-50',
+                                  isActive && 'bg-emerald-50/80'
+                                )}
+                              >
+                                <td className="px-4 py-3 font-medium text-gray-800">
+                                  {client.nome}
+                                </td>
+                                <td className="px-4 py-3 text-gray-600">
+                                  <div className="flex flex-col gap-1">
+                                    <span>{client.email ?? 'Sem e-mail'}</span>
+                                    <span className="text-xs text-gray-500">
+                                      {client.telefone ?? 'Sem telefone'}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-gray-600">
+                                  {client.cpf ?? '—'}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="flex justify-end gap-2">
+                                    {isActive ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                        <Check className="h-3 w-3" />
+                                        Selecionado
+                                      </span>
+                                    ) : (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setSelectedClientId(client.id ?? null)}
+                                        className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                      >
+                                        Selecionar
+                                      </Button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col items-start gap-2 border-t border-gray-100 pt-3 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    Quer cadastrar um novo cliente? Clique em &quot;Cadastrar cliente&quot; para abrir a tela dedicada. Ao retornar, a lista será atualizada automaticamente.
+                  </span>
+                  <Link
+                    href="/clientes"
+                    className="inline-flex items-center gap-2 text-emerald-600 transition hover:text-emerald-700"
+                  >
+                    <UserPlus2 className="h-4 w-4" />
+                    Cadastrar cliente
+                  </Link>
+                </div>
               </div>
-              <p className="text-xs text-gray-400">
-                Precisa cadastrar alguém novo? Utilize a página de clientes antes de concluir a venda.
-              </p>
             </div>
 
             <div className="mt-6 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
