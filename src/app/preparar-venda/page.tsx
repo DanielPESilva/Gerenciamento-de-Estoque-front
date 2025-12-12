@@ -79,7 +79,6 @@ export default function PrepararVendaPage() {
   const [clientsLoading, setClientsLoading] = useState(true);
   const [clientSearch, setClientSearch] = useState('');
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
-  const [clientsError, setClientsError] = useState<string | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const stored = localStorage.getItem('dressfy-sales-history');
@@ -136,7 +135,6 @@ export default function PrepararVendaPage() {
   const loadClients = useCallback(async () => {
     try {
       setClientsLoading(true);
-      setClientsError(null);
       const response = await clientesService.getAll({ page: 1, limit: 500 });
       const items = response.data ?? [];
       const sorted = [...items].sort((a, b) =>
@@ -148,8 +146,7 @@ export default function PrepararVendaPage() {
       cacheClients(sorted);
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
-      setClients([]);
-      setClientsError('Não foi possível carregar os clientes. Tente novamente em instantes.');
+      // mantém lista atual se já houver dados
     } finally {
       setClientsLoading(false);
     }
@@ -933,12 +930,6 @@ Cliente: ${selectedClient.nome}`);
                   />
                 </header>
 
-                {clientsError && (
-                  <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-                    {clientsError}
-                  </div>
-                )}
-
                 <div className="rounded-lg border border-gray-200">
                   {clientsLoading ? (
                     <div className="flex items-center justify-center gap-2 px-6 py-12 text-gray-500">
@@ -971,7 +962,7 @@ Cliente: ${selectedClient.nome}`);
                         {filteredClients.map((client, index) => {
                           const rowKey =
                             client.id ??
-                            `${client.nome}-${client.email ?? client.telefone ?? 'sem-identificador'}-${index}`;
+                            `${client.nome}-${client.email ?? client.telefone ?? 'cliente'}-${index}`;
                           const isActive = client.id === selectedClientId;
 
                           return (
