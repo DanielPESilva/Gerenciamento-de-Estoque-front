@@ -8,7 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { SuccessModal } from '@/components/SuccessModal';
 import { itemsService } from '@/services/items.service';
+import { clientesService } from '@/services/clientes.service';
 import { Item } from '@/types/item';
+import { Client } from '@/types/client';
 import { SaleItem } from '@/types/sale';
 import { CheckCircle2, CreditCard, Loader2, Minus, Plus, Trash2, X, ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -42,6 +44,10 @@ type SaleHistoryEntry = {
   items: number;
   amount: number;
   method: string;
+  client?: {
+    id: number | null;
+    name: string;
+  };
   details: SaleHistoryDetail[];
 };
 
@@ -69,27 +75,46 @@ export default function PrepararVendaPage() {
   const [processingSale, setProcessingSale] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('Pix');
   const [salesHistory, setSalesHistory] = useState<SaleHistoryEntry[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(true);
+  const [clientSearch, setClientSearch] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const stored = localStorage.getItem('dressfy-sales-history');
     if (!stored) return;
     try {
-      const parsed: SaleHistoryEntry[] = JSON.parse(stored).map(
-        (entry: Partial<SaleHistoryEntry>): SaleHistoryEntry => ({
-          timestamp: entry.timestamp ?? new Date().toISOString(),
-          items: entry.items ?? 0,
-          amount: entry.amount ?? 0,
-          method: entry.method ?? 'Desconhecido',
-          details:
-            entry.details?.map((detail) => ({
-              id: detail?.id ?? 0,
-              name: detail?.name ?? 'Item',
-              quantity: detail?.quantity ?? 0,
-              unitPrice: detail?.unitPrice ?? 0,
-              subtotal: detail?.subtotal ?? 0
-            })) ?? []
-        })
-      );
+        const parsed: SaleHistoryEntry[] = JSON.parse(stored).map(
+          (entry: Partial<SaleHistoryEntry> & { clientName?: string; cliente?: string }): SaleHistoryEntry => {
+            const fallbackClientName =
+              entry.client?.name ??
+              entry.clientName ??
+              entry.cliente ??
+              'Cliente não informado';
+
+            return {
+              timestamp: entry.timestamp ?? new Date().toISOString(),
+              items: entry.items ?? 0,
+              amount: entry.amount ?? 0,
+              method: entry.method ?? 'Desconhecido',
+              client: {
+                id:
+                  typeof entry.client?.id === 'number'
+                    ? entry.client.id
+                    : null,
+                name: fallbackClientName
+              },
+              details:
+                entry.details?.map((detail) => ({
+                  id: detail?.id ?? 0,
+                  name: detail?.name ?? 'Item',
+                  quantity: detail?.quantity ?? 0,
+                  unitPrice: detail?.unitPrice ?? 0,
+                  subtotal: detail?.subtotal ?? 0
+                })) ?? []
+            };
+          }
+        );
       parsed.sort(
         (a, b) =>
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
@@ -100,6 +125,22 @@ export default function PrepararVendaPage() {
     }
   }, []);
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
+
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        setClientsLoading(true);
+        const response = await clientesService.getAll({ page: 1, limit: 200 });
+        setClients(response.data);
+      } catch (error) {
+        console.error('Erro ao carregar clientes:', error);
+      } finally {
+        setClientsLoading(false);
+      }
+    };
+
+    fetchClients();
+  }, []);
 
   const loadItems = async (page = 1) => {
     try {
@@ -246,9 +287,36 @@ export default function PrepararVendaPage() {
     }).format(value);
   };
 
+  const filteredClients = useMemo(() => {
+    if (!clientSearch.trim()) {
+      return clients;
+    }
+    const term = clientSearch.toLowerCase();
+    return clients.filter((client) => {
+      const phone = client.telefone ?? '';
+      const email = client.email ?? '';
+      return (
+        client.nome.toLowerCase().includes(term) ||
+        phone.toLowerCase().includes(term) ||
+        email.toLowerCase().includes(term)
+      );
+    });
+  }, [clientSearch, clients]);
+
+  const selectedClient = useMemo(
+    () => clients.find((client) => client.id === selectedClientId) ?? null,
+    [clients, selectedClientId]
+  );
+
   const handleConfirmSale = async () => {
     if (Object.keys(selectedItems).length === 0) {
       setSuccessMessage('Selecione ao menos um item para registrar a venda.');
+      setSuccessModalOpen(true);
+      return;
+    }
+
+    if (!selectedClient) {
+      setSuccessMessage('Selecione um cliente para registrar a venda.');
       setSuccessModalOpen(true);
       return;
     }
@@ -279,6 +347,10 @@ export default function PrepararVendaPage() {
         items: totalQuantidade,
         amount: totalValor,
         method: paymentMethod,
+        client: {
+          id: selectedClient.id ?? null,
+          name: selectedClient.nome
+        },
         details: saleDetails
       };
 
@@ -300,8 +372,11 @@ export default function PrepararVendaPage() {
 
 Itens removidos: ${totalQuantidade}
 Valor total: ${formatCurrency(totalValor)}
-Método de pagamento: ${paymentMethod}`);
+Método de pagamento: ${paymentMethod}
+Cliente: ${selectedClient.nome}`);
       setSuccessModalOpen(true);
+      setSelectedClientId(null);
+      setClientSearch('');
     } catch (error) {
       console.error('Erro ao finalizar venda:', error);
       setSuccessMessage('Erro ao finalizar venda. Tente novamente.');
@@ -502,6 +577,33 @@ Método de pagamento: ${paymentMethod}`);
               </div>
             )}
           </div>
+          <div className="mt-4 space-y-3 rounded-lg border border-emerald-100 bg-emerald-50/60 p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-emerald-800">Cliente selecionado</p>
+                <p className="text-sm text-emerald-700">
+                  {selectedClient ? selectedClient.nome : 'Nenhum cliente selecionado'}
+                </p>
+                {selectedClient && (
+                  <p className="text-xs text-emerald-600">
+                    {selectedClient.email ?? 'Sem e-mail cadastrado'}
+                    {selectedClient.telefone ? ` • ${selectedClient.telefone}` : ''}
+                  </p>
+                )}
+              </div>
+              <Link
+                href="/clientes"
+                className="inline-flex items-center justify-center rounded-md border border-emerald-300 px-3 py-1 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
+              >
+                Gerenciar clientes
+              </Link>
+            </div>
+            {!selectedClient && (
+              <p className="text-xs text-emerald-700">
+                Escolha o cliente na lista abaixo para continuar o registro da venda.
+              </p>
+            )}
+          </div>
         </section>
 
         <section className="mb-8 rounded-lg bg-white p-6 shadow">
@@ -545,6 +647,10 @@ Método de pagamento: ${paymentMethod}`);
                     </span>
                     <span>
                       Método: <strong>{sale.method}</strong>
+                    </span>
+                    <span>
+                      Cliente:{' '}
+                      <strong>{sale.client?.name ?? 'Não informado'}</strong>
                     </span>
                   </div>
                 </div>
@@ -718,6 +824,79 @@ Método de pagamento: ${paymentMethod}`);
               </div>
             )}
 
+            <div className="mt-6 space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-700">Cliente da venda</h3>
+                  <p className="text-xs text-gray-500">
+                    Busque e selecione o cliente responsável por esta venda.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-emerald-600 transition hover:text-emerald-700"
+                  onClick={() => {
+                    setSelectedClientId(null);
+                    setClientSearch('');
+                  }}
+                >
+                  Limpar seleção de cliente
+                </button>
+              </div>
+              <Input
+                placeholder="Buscar por nome, e-mail ou telefone"
+                value={clientSearch}
+                onChange={(event) => setClientSearch(event.target.value)}
+                className="max-w-full"
+                disabled={clientsLoading}
+              />
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+                {clientsLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Carregando clientes...
+                  </div>
+                ) : filteredClients.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-gray-500">
+                    Nenhum cliente encontrado com o termo informado.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {filteredClients.slice(0, 50).map((client) => {
+                      const isActive = client.id === selectedClientId;
+                      return (
+                        <button
+                          key={client.id}
+                          type="button"
+                          onClick={() => setSelectedClientId(client.id)}
+                          className={cn(
+                            'flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition',
+                            isActive
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'hover:bg-gray-50'
+                          )}
+                        >
+                          <div>
+                            <p className="text-sm font-medium">
+                              {client.nome}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {client.email ?? 'Sem e-mail'}{' '}
+                              {client.telefone ? `• ${client.telefone}` : ''}
+                            </p>
+                          </div>
+                          {isActive && <Check className="h-4 w-4 text-emerald-600" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-400">
+                Precisa cadastrar alguém novo? Utilize a página de clientes antes de concluir a venda.
+              </p>
+            </div>
+
             <div className="mt-6 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <div className="flex justify-between text-sm text-gray-600">
                 <span>Quantidade total</span>
@@ -738,11 +917,16 @@ Método de pagamento: ${paymentMethod}`);
               <Button
                 className="bg-emerald-500 text-white hover:bg-emerald-600"
                 onClick={handleConfirmSale}
-                disabled={processingSale}
+                disabled={processingSale || !selectedClient}
               >
                 {processingSale ? 'Processando...' : 'Confirmar venda'}
               </Button>
             </div>
+            {!selectedClient && (
+              <p className="text-xs text-red-500">
+                Selecione um cliente para habilitar a finalização da venda.
+              </p>
+            )}
           </section>
         </div>
       </main>
