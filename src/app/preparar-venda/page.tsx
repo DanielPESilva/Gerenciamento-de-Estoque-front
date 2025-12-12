@@ -79,6 +79,7 @@ export default function PrepararVendaPage() {
   const [clientsLoading, setClientsLoading] = useState(true);
   const [clientSearch, setClientSearch] = useState('');
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+  const [clientsError, setClientsError] = useState<string | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const stored = localStorage.getItem('dressfy-sales-history');
@@ -135,6 +136,7 @@ export default function PrepararVendaPage() {
   const loadClients = useCallback(async () => {
     try {
       setClientsLoading(true);
+      setClientsError(null);
       const response = await clientesService.getAll({ page: 1, limit: 500 });
       const items = response.data ?? [];
       const sorted = [...items].sort((a, b) =>
@@ -147,6 +149,7 @@ export default function PrepararVendaPage() {
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
       setClients([]);
+      setClientsError('Não foi possível carregar os clientes. Tente novamente em instantes.');
     } finally {
       setClientsLoading(false);
     }
@@ -913,27 +916,33 @@ Cliente: ${selectedClient.nome}`);
                 </button>
               </div>
 
-              <section className="rounded-lg bg-white p-4 shadow-sm">
-                <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <section className="rounded-lg bg-white p-6 shadow">
+                <header className="mb-4 flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-800">Clientes cadastrados</h4>
-                    <p className="text-xs text-gray-500">
-                      Estes clientes estarão disponíveis para vincular à venda.
+                    <h4 className="text-lg font-semibold text-gray-800">Clientes cadastrados</h4>
+                    <p className="text-sm text-gray-500">
+                      Estes clientes estarão disponíveis ao criar ou finalizar condicionais.
                     </p>
                   </div>
                   <Input
                     placeholder="Buscar por nome, email ou telefone"
-                    className="sm:max-w-xs"
+                    className="max-w-xs"
                     value={clientSearch}
                     onChange={(event) => setClientSearch(event.target.value)}
                     disabled={clientsLoading}
                   />
                 </header>
 
+                {clientsError && (
+                  <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                    {clientsError}
+                  </div>
+                )}
+
                 <div className="rounded-lg border border-gray-200">
                   {clientsLoading ? (
-                    <div className="flex items-center justify-center gap-2 px-6 py-10 text-sm text-gray-500">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                    <div className="flex items-center justify-center gap-2 px-6 py-12 text-gray-500">
+                      <Loader2 className="h-5 w-5 animate-spin" />
                       Carregando clientes...
                     </div>
                   ) : filteredClients.length === 0 ? (
@@ -962,16 +971,13 @@ Cliente: ${selectedClient.nome}`);
                         {filteredClients.map((client, index) => {
                           const rowKey =
                             client.id ??
-                            `${client.nome}-${client.email ?? client.telefone ?? 'cliente'}-${index}`;
+                            `${client.nome}-${client.email ?? client.telefone ?? 'sem-identificador'}-${index}`;
                           const isActive = client.id === selectedClientId;
 
                           return (
                             <tr
                               key={rowKey}
-                              className={cn(
-                                'transition hover:bg-gray-50',
-                                isActive && 'bg-emerald-50/80'
-                              )}
+                              className={cn('hover:bg-gray-50', isActive && 'bg-emerald-50/80')}
                             >
                               <td className="px-6 py-4 font-medium text-gray-800">{client.nome}</td>
                               <td className="px-6 py-4">
@@ -986,7 +992,7 @@ Cliente: ${selectedClient.nome}`);
                                 {formatClientDate(client.criado_em)}
                               </td>
                               <td className="px-6 py-4 text-right">
-                                <div className="flex justify-end gap-2">
+                                <div className="flex justify-end">
                                   <button
                                     onClick={() => setSelectedClientId(client.id ?? null)}
                                     className={cn(
@@ -1008,10 +1014,9 @@ Cliente: ${selectedClient.nome}`);
                   )}
                 </div>
 
-                <div className="mt-4 flex flex-col items-start gap-2 border-t border-gray-200 pt-3 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+                <div className="mt-4 flex flex-col items-start gap-2 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between">
                   <span>
-                    Quer cadastrar um novo cliente? Utilize a tela dedicada e, ao retornar, a lista
-                    será atualizada automaticamente.
+                    Quer cadastrar um novo cliente? Utilize a tela dedicada e, ao retornar, a lista será atualizada automaticamente.
                   </span>
                   <Link
                     href="/clientes"
