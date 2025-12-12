@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
@@ -126,21 +126,52 @@ export default function PrepararVendaPage() {
   }, []);
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
 
+  const loadClients = useCallback(async () => {
+    try {
+      setClientsLoading(true);
+      const response = await clientesService.getAll({ page: 1, limit: 500 });
+      const items = response.data ?? [];
+      const sorted = [...items].sort((a, b) =>
+        (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR', {
+          sensitivity: 'base'
+        })
+      );
+      setClients(sorted);
+    } catch (error) {
+      console.error('Erro ao carregar clientes:', error);
+      setClients([]);
+    } finally {
+      setClientsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        setClientsLoading(true);
-        const response = await clientesService.getAll({ page: 1, limit: 200 });
-        setClients(response.data);
-      } catch (error) {
-        console.error('Erro ao carregar clientes:', error);
-      } finally {
-        setClientsLoading(false);
+    loadClients();
+  }, [loadClients]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      if (!document.hidden) {
+        void loadClients();
       }
     };
 
-    fetchClients();
-  }, []);
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'dressfy-clients-updated') {
+        void loadClients();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('storage', handleStorage);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('storage', handleStorage);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [loadClients]);
 
   const loadItems = async (page = 1) => {
     try {
@@ -287,21 +318,31 @@ export default function PrepararVendaPage() {
     }).format(value);
   };
 
+  const normalizeText = useCallback((value: string) => {
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  }, []);
+
   const filteredClients = useMemo(() => {
     if (!clientSearch.trim()) {
       return clients;
     }
-    const term = clientSearch.toLowerCase();
+    const term = normalizeText(clientSearch);
     return clients.filter((client) => {
-      const phone = client.telefone ?? '';
-      const email = client.email ?? '';
+      const name = normalizeText(client.nome ?? '');
+      const phone = normalizeText(String(client.telefone ?? ''));
+      const email = normalizeText(client.email ?? '');
+      const cpf = normalizeText(String(client.cpf ?? ''));
       return (
-        client.nome.toLowerCase().includes(term) ||
-        phone.toLowerCase().includes(term) ||
-        email.toLowerCase().includes(term)
+        name.includes(term) ||
+        phone.includes(term) ||
+        email.includes(term) ||
+        cpf.includes(term)
       );
     });
-  }, [clientSearch, clients]);
+  }, [clientSearch, clients, normalizeText]);
 
   const selectedClient = useMemo(
     () => clients.find((client) => client.id === selectedClientId) ?? null,
@@ -858,7 +899,9 @@ Cliente: ${selectedClient.nome}`);
                   </div>
                 ) : filteredClients.length === 0 ? (
                   <div className="py-6 text-center text-xs text-gray-500">
-                    Nenhum cliente encontrado com o termo informado.
+                    {clientSearch.trim()
+                      ? 'Nenhum cliente encontrado com o termo informado.'
+                      : 'Nenhum cliente cadastrado. Cadastre novos clientes para selecioná-los aqui.'}
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-100">
