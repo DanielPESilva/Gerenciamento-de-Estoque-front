@@ -12,18 +12,7 @@ import { clientesService } from '@/services/clientes.service';
 import { Item } from '@/types/item';
 import { Client } from '@/types/client';
 import { SaleItem } from '@/types/sale';
-import {
-  CheckCircle2,
-  CreditCard,
-  Loader2,
-  Minus,
-  Plus,
-  Trash2,
-  X,
-  ChevronDown,
-  Check,
-  UserPlus2
-} from 'lucide-react';
+import { CheckCircle2, CreditCard, Loader2, Minus, Plus, Trash2, X, ChevronDown, Check, UserPlus2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FilterState {
@@ -137,6 +126,12 @@ export default function PrepararVendaPage() {
   }, []);
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
 
+  const cacheClients = useCallback((list: Client[]) => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('dressfy-clients-cache', JSON.stringify(list));
+    }
+  }, []);
+
   const loadClients = useCallback(async () => {
     try {
       setClientsLoading(true);
@@ -148,11 +143,33 @@ export default function PrepararVendaPage() {
         })
       );
       setClients(sorted);
+      cacheClients(sorted);
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
       setClients([]);
     } finally {
       setClientsLoading(false);
+    }
+  }, [cacheClients]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const cached = window.localStorage.getItem('dressfy-clients-cache');
+      if (cached) {
+        const parsed: Client[] = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const sorted = [...parsed].sort((a, b) =>
+            (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR', {
+              sensitivity: 'base'
+            })
+          );
+          setClients(sorted);
+          setClientsLoading(false);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar cache de clientes:', error);
     }
   }, []);
 
@@ -329,40 +346,20 @@ export default function PrepararVendaPage() {
     }).format(value);
   };
 
-  const normalizeText = useCallback((value: string) => {
-    return value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
-  }, []);
-
-  const sanitizeDigits = useCallback((value: string | null | undefined) => {
-    return (value ?? '').replace(/\D/g, '');
-  }, []);
-
   const filteredClients = useMemo(() => {
-    if (!clientSearch.trim()) {
-      return clients;
-    }
-    const termNormalized = normalizeText(clientSearch);
-    const termDigits = sanitizeDigits(clientSearch);
-
+    if (!clientSearch.trim()) return clients;
+    const term = clientSearch.toLowerCase();
     return clients.filter((client) => {
-      const name = normalizeText(client.nome ?? '');
-      const email = normalizeText(client.email ?? '');
-      const phoneDigits = sanitizeDigits(client.telefone);
-      const cpfDigits = sanitizeDigits(client.cpf);
-
-      const matchesText =
-        name.includes(termNormalized) || email.includes(termNormalized);
-
-      const matchesDigits =
-        termDigits.length > 0 &&
-        (phoneDigits.includes(termDigits) || cpfDigits.includes(termDigits));
-
-      return matchesText || matchesDigits;
+      const nome = client.nome?.toLowerCase() ?? '';
+      const email = client.email?.toLowerCase() ?? '';
+      const telefone = client.telefone?.toLowerCase() ?? '';
+      return (
+        nome.includes(term) ||
+        email.includes(term) ||
+        telefone.includes(term)
+      );
     });
-  }, [clientSearch, clients, normalizeText, sanitizeDigits]);
+  }, [clients, clientSearch]);
 
   const selectedClient = useMemo(
     () => clients.find((client) => client.id === selectedClientId) ?? null,
@@ -378,26 +375,6 @@ export default function PrepararVendaPage() {
       month: '2-digit',
       year: 'numeric'
     });
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const cached = window.localStorage.getItem('dressfy-clients-cache');
-    if (!cached) return;
-    try {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const sorted = [...parsed].sort((a, b) =>
-          (a?.nome ?? '').localeCompare(b?.nome ?? '', 'pt-BR', {
-            sensitivity: 'base'
-          })
-        );
-        setClients(sorted);
-        setClientsLoading(false);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar cache de clientes:', error);
-    }
   }, []);
 
   const handleConfirmSale = async () => {
