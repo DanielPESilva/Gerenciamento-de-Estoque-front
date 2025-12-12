@@ -83,11 +83,18 @@ export default function ClientesPage() {
     }
   });
 
+  const notifyClientsUpdated = () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('dressfy-clients-updated', Date.now().toString());
+    }
+  };
+
   const loadClients = async () => {
     try {
       setIsLoading(true);
       const response = await clientesService.getAll({ page: 1, limit: 100 });
       setClients(response.data);
+      notifyClientsUpdated();
     } catch (err) {
       console.error('Erro ao carregar clientes:', err);
       setError('Não foi possível carregar os clientes. Tente novamente em instantes.');
@@ -122,6 +129,7 @@ export default function ClientesPage() {
             client.id === clientToEdit.id ? { ...client, ...updated } : client
           )
         );
+        notifyClientsUpdated();
         setModalVariant('success');
         setModalTitle('Tudo certo!');
         setSuccessMessage('Cliente atualizado com sucesso!');
@@ -218,6 +226,7 @@ export default function ClientesPage() {
       setIsDeleting(true);
       await clientesService.delete(clientToDelete.id);
       setClients((prev) => prev.filter((c) => c.id !== clientToDelete.id));
+      notifyClientsUpdated();
       setModalVariant('success');
       setModalTitle('Tudo certo!');
       setSuccessMessage('Cliente removido com sucesso.');
