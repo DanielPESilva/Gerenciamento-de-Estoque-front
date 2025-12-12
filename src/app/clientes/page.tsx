@@ -83,6 +83,12 @@ export default function ClientesPage() {
     }
   });
 
+  const cacheClients = (list: Client[]) => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('dressfy-clients-cache', JSON.stringify(list));
+    }
+  };
+
   const notifyClientsUpdated = () => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('dressfy-clients-updated', Date.now().toString());
@@ -93,7 +99,9 @@ export default function ClientesPage() {
     try {
       setIsLoading(true);
       const response = await clientesService.getAll({ page: 1, limit: 100 });
-      setClients(response.data);
+      const items = response.data ?? [];
+      setClients(items);
+      cacheClients(items);
       notifyClientsUpdated();
     } catch (err) {
       console.error('Erro ao carregar clientes:', err);
@@ -124,11 +132,13 @@ export default function ClientesPage() {
         const updated = await clientesService.update(clientToEdit.id, {
           ...sanitizedPayload
         });
-        setClients((prev) =>
-          prev.map((client) =>
+        setClients((prev) => {
+          const next = prev.map((client) =>
             client.id === clientToEdit.id ? { ...client, ...updated } : client
-          )
-        );
+          );
+          cacheClients(next);
+          return next;
+        });
         notifyClientsUpdated();
         setModalVariant('success');
         setModalTitle('Tudo certo!');
@@ -225,7 +235,11 @@ export default function ClientesPage() {
     try {
       setIsDeleting(true);
       await clientesService.delete(clientToDelete.id);
-      setClients((prev) => prev.filter((c) => c.id !== clientToDelete.id));
+      setClients((prev) => {
+        const next = prev.filter((c) => c.id !== clientToDelete.id);
+        cacheClients(next);
+        return next;
+      });
       notifyClientsUpdated();
       setModalVariant('success');
       setModalTitle('Tudo certo!');

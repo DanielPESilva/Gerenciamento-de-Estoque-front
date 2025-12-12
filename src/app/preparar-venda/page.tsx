@@ -369,6 +369,37 @@ export default function PrepararVendaPage() {
     [clients, selectedClientId]
   );
 
+  const formatClientDate = useCallback((date?: string | null) => {
+    if (!date) return '—';
+    const parsed = new Date(date);
+    if (Number.isNaN(parsed.getTime())) return '—';
+    return parsed.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const cached = window.localStorage.getItem('dressfy-clients-cache');
+    if (!cached) return;
+    try {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const sorted = [...parsed].sort((a, b) =>
+          (a?.nome ?? '').localeCompare(b?.nome ?? '', 'pt-BR', {
+            sensitivity: 'base'
+          })
+        );
+        setClients(sorted);
+        setClientsLoading(false);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar cache de clientes:', error);
+    }
+  }, []);
+
   const handleConfirmSale = async () => {
     if (Object.keys(selectedItems).length === 0) {
       setSuccessMessage('Selecione ao menos um item para registrar a venda.');
@@ -942,7 +973,7 @@ Cliente: ${selectedClient.nome}`);
                           <tr>
                             <th className="px-4 py-3 text-left font-semibold">Nome</th>
                             <th className="px-4 py-3 text-left font-semibold">Contato</th>
-                            <th className="px-4 py-3 text-left font-semibold">CPF</th>
+                            <th className="px-4 py-3 text-left font-semibold">Criado em</th>
                             <th className="px-4 py-3 text-right font-semibold">
                               Selecionar
                             </th>
@@ -971,7 +1002,7 @@ Cliente: ${selectedClient.nome}`);
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 text-gray-600">
-                                  {client.cpf ?? '—'}
+                                  {formatClientDate(client.criado_em)}
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <div className="flex justify-end gap-2">
