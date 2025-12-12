@@ -916,7 +916,7 @@ Cliente: ${selectedClient.nome}`);
               </div>
             )}
 
-            <div className="mt-6 space-y-3">
+            <div className="mt-6 space-y-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 className="text-base font-semibold text-gray-700">Cliente da venda</h3>
@@ -935,107 +935,106 @@ Cliente: ${selectedClient.nome}`);
                   Limpar seleção de cliente
                 </button>
               </div>
-              <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+              <section className="rounded-lg bg-white p-4 shadow-sm">
+                <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-800">Clientes cadastrados</h4>
+                    <p className="text-xs text-gray-500">
+                      Estes clientes estarão disponíveis para vincular à venda.
+                    </p>
+                  </div>
                   <Input
-                    placeholder="Buscar por nome, e-mail, telefone ou CPF"
+                    placeholder="Buscar por nome, email ou telefone"
+                    className="sm:max-w-xs"
                     value={clientSearch}
                     onChange={(event) => setClientSearch(event.target.value)}
-                    className="sm:max-w-xs"
                     disabled={clientsLoading}
                   />
-                  <div className="flex gap-2 text-xs text-gray-500">
-                    <span>Total cadastrados: {clients.length}</span>
-                    {selectedClient && (
-                      <span className="text-emerald-600">
-                        Cliente selecionado: {selectedClient.nome}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                </header>
 
-                <div className="rounded-lg border border-gray-100">
-                {clientsLoading ? (
-                    <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-500">
+                <div className="rounded-lg border border-gray-200">
+                  {clientsLoading ? (
+                    <div className="flex items-center justify-center gap-2 px-6 py-10 text-sm text-gray-500">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Carregando clientes...
                     </div>
                   ) : filteredClients.length === 0 ? (
-                    <div className="px-6 py-10 text-center text-sm text-gray-500">
-                      {clients.length === 0
-                        ? 'Nenhum cliente cadastrado. Utilize o botão abaixo para cadastrar.'
-                        : 'Nenhum cliente encontrado com o termo informado.'}
+                    <div className="px-6 py-12 text-center text-sm text-gray-500">
+                      Nenhum cliente encontrado. Cadastre novos clientes para começar.
                     </div>
                   ) : (
-                    <div className="max-h-72 overflow-y-auto">
-                      <table className="min-w-full divide-y divide-gray-200 text-sm">
-                        <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                          <tr>
-                            <th className="px-4 py-3 text-left font-semibold">Nome</th>
-                            <th className="px-4 py-3 text-left font-semibold">Contato</th>
-                            <th className="px-4 py-3 text-left font-semibold">Criado em</th>
-                            <th className="px-4 py-3 text-right font-semibold">
-                              Selecionar
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 bg-white">
-                          {filteredClients.map((client) => {
-                            const isActive = client.id === selectedClientId;
-                            return (
-                              <tr
-                                key={client.id ?? `${client.nome}-${client.email}`}
-                                className={cn(
-                                  'transition hover:bg-gray-50',
-                                  isActive && 'bg-emerald-50/80'
-                                )}
-                              >
-                                <td className="px-4 py-3 font-medium text-gray-800">
-                                  {client.nome}
-                                </td>
-                                <td className="px-4 py-3 text-gray-600">
-                                  <div className="flex flex-col gap-1">
-                                    <span>{client.email ?? 'Sem e-mail'}</span>
-                                    <span className="text-xs text-gray-500">
-                                      {client.telefone ?? 'Sem telefone'}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-gray-600">
-                                  {formatClientDate(client.criado_em)}
-                                </td>
-                                <td className="px-4 py-3 text-right">
-                                  <div className="flex justify-end gap-2">
-                                    {isActive ? (
-                                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                                        <Check className="h-3 w-3" />
-                                        Selecionado
-                                      </span>
-                                    ) : (
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setSelectedClientId(client.id ?? null)}
-                                        className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                                      >
-                                        Selecionar
-                                      </Button>
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                            Nome
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                            Contato
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                            Criado em
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                            Ações
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 bg-white text-sm text-gray-600">
+                        {filteredClients.map((client, index) => {
+                          const rowKey =
+                            client.id ??
+                            `${client.nome}-${client.email ?? client.telefone ?? 'cliente'}-${index}`;
+                          const isActive = client.id === selectedClientId;
+
+                          return (
+                            <tr
+                              key={rowKey}
+                              className={cn(
+                                'transition hover:bg-gray-50',
+                                isActive && 'bg-emerald-50/80'
+                              )}
+                            >
+                              <td className="px-6 py-4 font-medium text-gray-800">{client.nome}</td>
+                              <td className="px-6 py-4">
+                                <div className="flex flex-col gap-1">
+                                  {client.email && <span>{client.email}</span>}
+                                  {client.telefone && (
+                                    <span className="text-xs text-gray-500">{client.telefone}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                {formatClientDate(client.criado_em)}
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => setSelectedClientId(client.id ?? null)}
+                                    className={cn(
+                                      'inline-flex items-center rounded-md border px-3 py-1 text-xs font-semibold transition',
+                                      isActive
+                                        ? 'border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600'
+                                        : 'border-emerald-100 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700'
                                     )}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                                  >
+                                    {isActive ? 'Selecionado' : 'Selecionar'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   )}
                 </div>
 
-                <div className="flex flex-col items-start gap-2 border-t border-gray-100 pt-3 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+                <div className="mt-4 flex flex-col items-start gap-2 border-t border-gray-200 pt-3 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between">
                   <span>
-                    Quer cadastrar um novo cliente? Clique em &quot;Cadastrar cliente&quot; para abrir a tela dedicada. Ao retornar, a lista será atualizada automaticamente.
+                    Quer cadastrar um novo cliente? Utilize a tela dedicada e, ao retornar, a lista
+                    será atualizada automaticamente.
                   </span>
                   <Link
                     href="/clientes"
@@ -1045,7 +1044,7 @@ Cliente: ${selectedClient.nome}`);
                     Cadastrar cliente
                   </Link>
                 </div>
-              </div>
+              </section>
             </div>
 
             <div className="mt-6 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
