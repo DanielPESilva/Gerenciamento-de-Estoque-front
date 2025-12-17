@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,13 +12,40 @@ import { Item } from '@/types/item';
 import { Pencil, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AxiosError } from 'axios';
 
+type SaleHistoryDetail = {
+  id: number;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+};
+
+type SaleHistoryEntry = {
+  timestamp: string;
+  items: number;
+  amount: number;
+  method: string;
+  details: SaleHistoryDetail[];
+};
+
+const STORAGE_KEY = 'dressfy-sales-history';
+
+const getEntryItems = (entry: SaleHistoryEntry) =>
+  entry.details.length
+    ? entry.details.reduce((total, detail) => total + detail.quantity, 0)
+    : entry.items;
+
+const getEntryAmount = (entry: SaleHistoryEntry) =>
+  entry.details.length
+    ? entry.details.reduce((total, detail) => total + detail.subtotal, 0)
+    : entry.amount;
+
 export default function DashboardPage() {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
   const [filters, setFilters] = useState({
     nome: '',
     tamanho: '',
@@ -33,6 +60,67 @@ export default function DashboardPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<Item | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [salesHistory, setSalesHistory] = useState<SaleHistoryEntry[]>([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [appliedRange, setAppliedRange] = useState<{ start: Date | null; end: Date | null }>({
+    start: null,
+    end: null
+  });
+
+  // Carrega histórico salvo localmente (mesmo padrão da tela de preparar venda)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return;
+
+    try {
+      const parsed: SaleHistoryEntry[] = JSON.parse(stored).map(
+        (entry: Partial<SaleHistoryEntry>): SaleHistoryEntry => ({
+          timestamp: entry.timestamp ?? new Date().toISOString(),
+          items: entry.items ?? 0,
+          amount: entry.amount ?? 0,
+          method: entry.method ?? 'Desconhecido',
+          details:
+            entry.details?.map((detail) => ({
+              id: detail?.id ?? 0,
+              name: detail?.name ?? 'Item',
+              quantity: detail?.quantity ?? 0,
+              unitPrice: detail?.unitPrice ?? 0,
+              subtotal: detail?.subtotal ?? 0
+            })) ?? []
+        })
+      );
+
+      parsed.sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      setSalesHistory(parsed);
+    } catch (error) {
+      console.error('Erro ao carregar histórico de vendas:', error);
+    }
+  }, []);
+
+  const filteredHistory = useMemo(() => {
+    if (!appliedRange.start && !appliedRange.end) return salesHistory;
+
+    return salesHistory.filter((entry) => {
+      const ts = new Date(entry.timestamp).getTime();
+      if (appliedRange.start && ts < appliedRange.start.getTime()) return false;
+      if (appliedRange.end && ts > appliedRange.end.getTime()) return false;
+      return true;
+    });
+  }, [appliedRange, salesHistory]);
+
+  const totalVendasPeriodo = filteredHistory.length;
+  const totalItensPeriodo = useMemo(
+    () => filteredHistory.reduce((total, entry) => total + getEntryItems(entry), 0),
+    [filteredHistory]
+  );
+  const totalArrecadadoPeriodo = useMemo(
+    () => filteredHistory.reduce((total, entry) => total + getEntryAmount(entry), 0),
+    [filteredHistory]
+  );
 
   const loadItems = async () => {
     try {
@@ -76,9 +164,6 @@ export default function DashboardPage() {
             const itemStatus = item.quantidade > 0 ? 'disponível' : 'indisponível';
             return itemStatus.includes(statusFilter);
           });
-        } else {
-          // Sem filtro explícito: mostrar apenas itens com estoque disponível
-          itemsWithoutHash = itemsWithoutHash.filter(item => item.quantidade > 0);
         }
 
         if (valorNum && !isNaN(valorNum)) {
@@ -90,10 +175,7 @@ export default function DashboardPage() {
         console.log(`📊 Items encontrados: ${itemsWithoutHash.length}`);
 
         setItems(itemsWithoutHash);
-        const pageLimit = response.pagination.limit ?? 10;
-        const totalFiltered = itemsWithoutHash.length;
-        setTotalItems(totalFiltered);
-        setTotalPages(Math.max(1, Math.ceil(totalFiltered / pageLimit)));
+        setTotalPages(response.pagination.totalPages ?? 1);
       } else {
         console.error('❌ Erro na resposta da API:', response);
       }
@@ -175,6 +257,21 @@ export default function DashboardPage() {
       style: 'currency',
       currency: 'BRL'
     }).format(value);
+  };
+
+  const applyDateRange = () => {
+    if (!startDate && !endDate) {
+      setAppliedRange({ start: null, end: null });
+      return;
+    }
+
+    const start = startDate ? new Date(startDate) : null;
+    const end = endDate ? new Date(endDate) : null;
+
+    if (start) start.setHours(0, 0, 0, 0);
+    if (end) end.setHours(23, 59, 59, 999);
+
+    setAppliedRange({ start, end });
   };
 
   return (
@@ -311,6 +408,54 @@ export default function DashboardPage() {
             >
               Cadastrar Item
             </Button>
+          </div>
+        </div>
+
+        {/* Resumo de vendas (histórico local) */}
+        <div className="bg-white rounded-lg shadow mb-6 p-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="flex flex-col">
+              <label className="text-sm font-medium text-gray-700 mb-1">Início do período</label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col">
+              <label className="text-sm font-medium text-gray-700 mb-1">Final do período</label>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
+                onClick={applyDateRange}
+                disabled={!!startDate && !!endDate && new Date(startDate) > new Date(endDate)}
+              >
+                Aplicar intervalo
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4 text-center shadow-sm">
+              <div className="text-sm text-emerald-700">Vendas no período</div>
+              <div className="text-2xl font-semibold text-emerald-600">{totalVendasPeriodo}</div>
+            </div>
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-center shadow-sm">
+              <div className="text-sm text-blue-700">Itens vendidos</div>
+              <div className="text-2xl font-semibold text-blue-600">{totalItensPeriodo}</div>
+            </div>
+            <div className="rounded-lg border border-purple-100 bg-purple-50 p-4 text-center shadow-sm">
+              <div className="text-sm text-purple-700">Total arrecadado</div>
+              <div className="text-2xl font-semibold text-purple-600">
+                {formatCurrency(totalArrecadadoPeriodo)}
+              </div>
+            </div>
           </div>
         </div>
 
